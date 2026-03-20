@@ -3,13 +3,9 @@ import { authenticate, AuthRequest } from "../../middlewares/auth";
 import { ServiceRequest } from "../../models/ServiceRequest";
 import { Settings } from "../../models/Settings";
 import { logger } from "../../lib/logger";
-import puppeteerCore from "puppeteer-core";
-import { addExtra } from "puppeteer-extra";
-import StealthPlugin from "puppeteer-extra-plugin-stealth";
 
 const router = Router();
 
-const CHROMIUM_PATH = "/nix/store/qa9cnw4v5xkxyip6mb9kxqfq1z4x2dx1-chromium-138.0.7204.100/bin/chromium";
 
 // ── In-memory caches ─────────────────────────────────────────
 let tokenCache: { token: string; expiresAt: number; sandbox: boolean } | null = null;
@@ -94,94 +90,13 @@ async function registerIPN(token: string, ipnUrl: string, sandbox: boolean): Pro
   return id;
 }
 
-// Build a stealth-enabled puppeteer instance once (avoid re-registering plugin)
-const puppeteer = addExtra(puppeteerCore as any);
-puppeteer.use(StealthPlugin());
-
-// ── Headless browser: auto-fill Pesapal page and trigger STK push ──
-async function triggerSTKPushHeadless(redirectUrl: string, rawPhone: string): Promise<void> {
-  // Normalise to 9 digits (strip +254 or leading 0)
-  let phone = rawPhone.replace(/\D/g, "");
-  if (phone.startsWith("254")) phone = phone.slice(3);
-  if (phone.startsWith("0"))   phone = phone.slice(1);
-
-  logger.info({ phone, redirectUrl }, "Launching headless browser for STK push");
-
-  const browser = await puppeteer.launch({
-    executablePath: CHROMIUM_PATH,
-    args: [
-      "--no-sandbox",
-      "--disable-setuid-sandbox",
-      "--disable-dev-shm-usage",
-      "--disable-gpu",
-      "--disable-blink-features=AutomationControlled",
-      "--window-size=1280,800",
-    ],
-    headless: true,
-  } as any);
-
-  try {
-    const page = await browser.newPage();
-    await page.setViewport({ width: 1280, height: 800 });
-    // Desktop Chrome UA — matches the Chromium binary version
-    await page.setUserAgent(
-      "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36"
-    );
-
-    // Load the payment page — let ALL resources through so ThreatMetrix fingerprinting works
-    await page.goto(redirectUrl, { waitUntil: "networkidle2", timeout: 30_000 });
-    await new Promise(r => setTimeout(r, 1500));
-
-    // Ensure M-Pesa radio is selected
-    await page.evaluate(() => {
-      const radio = document.querySelector<HTMLInputElement>('input[value="pmpesake"]');
-      if (radio && !radio.checked) radio.click();
-    });
-    await new Promise(r => setTimeout(r, 500));
-
-    // Fill the phone number field
-    await page.waitForSelector("#PhoneNumber1", { visible: true, timeout: 10_000 });
-    await page.click("#PhoneNumber1", { clickCount: 3 });
-    await page.type("#PhoneNumber1", phone, { delay: 80 });
-
-    logger.info({ phone }, "Phone filled — clicking Proceed");
-    await page.click("#submitFormBtn");
-
-    // Wait up to 25 s for EITHER:
-    //   (a) step-2 div appears  — new order, STK push sent, same page
-    //   (b) navigation to PaymentConfirmation — order already processed
-    try {
-      await Promise.race([
-        page.waitForFunction(
-          () => {
-            const el = document.querySelector("#pmpesake2");
-            return el && !el.classList.contains("hide");
-          },
-          { timeout: 25_000 }
-        ),
-        page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 25_000 })
-          .catch(() => null),
-      ]);
-      const finalUrl = page.url();
-      logger.info({ finalUrl }, "STK push result page reached");
-    } catch (waitErr) {
-      // Capture screenshot for debugging so we can see what Pesapal showed
-      await page.screenshot({ path: "/tmp/pesapal_debug.png", fullPage: true });
-      const bodySnippet = await page.evaluate(() => document.body?.innerText?.substring(0, 500));
-      logger.error({ bodySnippet }, "STK push wait timed out — screenshot saved to /tmp/pesapal_debug.png");
-      throw waitErr;
-    }
-  } finally {
-    await browser.close();
-  }
-}
 
 // POST /api/payment/initiate — user triggers STK push
 router.post("/initiate", authenticate, async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { requestId, phone } = req.body;
-    if (!requestId || !phone) {
-      res.status(400).json({ message: "requestId and phone are required" });
+    if (!requestId) {
+      res.status(400).json({ message: "requestId is required" });
       return;
     }
 
@@ -212,8 +127,8 @@ router.post("/initiate", authenticate, async (req: AuthRequest, res: Response): 
     const notificationId = await registerIPN(token, ipnUrl, creds.sandbox);
 
     const user = serviceReq.user as any;
-    const cleanPhone = phone.replace(/\D/g, "");
-    const formattedPhone = cleanPhone.startsWith("0") ? `254${cleanPhone.slice(1)}` : cleanPhone;
+    const cleanPhone = (phone || "").replace(/\D/g, "");
+    const formattedPhone = cleanPhone.startsWith("0") ? `254${cleanPhone.slice(1)}` : (cleanPhone || "254000000000");
 
     const orderPayload = {
       id: `NTX-${serviceReq._id}-${Date.now()}`,
@@ -257,15 +172,10 @@ router.post("/initiate", authenticate, async (req: AuthRequest, res: Response): 
       pesapalOrderTrackingId: orderData.order_tracking_id,
     });
 
-    // Auto-fill Pesapal page and trigger STK push using headless browser
-    // Runs in background — we respond quickly and let polling detect payment
-    triggerSTKPushHeadless(orderData.redirect_url, phone).catch(err => {
-      logger.error({ err: err.message }, "Headless STK push failed");
-    });
-
     res.json({
-      message: "Payment prompt is being sent to your phone. Please wait…",
+      message: "Open the payment page to complete your M-Pesa payment.",
       orderTrackingId: orderData.order_tracking_id,
+      redirectUrl: orderData.redirect_url,
     });
   } catch (err: any) {
     logger.error({ err: err.message }, "Payment initiation error");

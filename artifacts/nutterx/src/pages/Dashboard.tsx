@@ -40,18 +40,16 @@ const fadeItem = {
 };
 
 // ── Payment Modal ────────────────────────────────────────────
-type PaymentStep = "phone" | "sending" | "waiting" | "success" | "failed";
+type PaymentStep = "phone" | "sending" | "pesapal" | "waiting" | "success" | "failed";
 
 function PaymentModal({ request, onClose, onPaid }: { request: any; onClose: () => void; onPaid: () => void }) {
-  const [phone, setPhone] = useState("");
   const [step, setStep] = useState<PaymentStep>("phone");
   const [error, setError] = useState("");
   const [orderId, setOrderId] = useState("");
+  const [redirectUrl, setRedirectUrl] = useState("");
   const { toast } = useToast();
 
   const initiatePayment = async () => {
-    const cleaned = phone.replace(/\D/g, "");
-    if (cleaned.length < 9) { setError("Enter a valid phone number (e.g. 0712345678)"); return; }
     setError(""); setStep("sending");
 
     try {
@@ -59,20 +57,22 @@ function PaymentModal({ request, onClose, onPaid }: { request: any; onClose: () 
       const res = await fetch("/api/payment/initiate", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ requestId: request._id, phone: cleaned }),
+        body: JSON.stringify({ requestId: request._id }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Payment failed");
       setOrderId(data.orderTrackingId || "");
-      setStep("waiting");
+      setRedirectUrl(data.redirectUrl || "");
+      setStep("pesapal");
     } catch (err: any) {
       setStep("phone");
       setError(err.message || "Could not initiate payment");
     }
   };
 
+  // Poll as soon as an order exists (both during pesapal and waiting steps)
   useEffect(() => {
-    if (step !== "waiting" || !orderId) return;
+    if (!orderId || step === "phone" || step === "sending" || step === "success" || step === "failed") return;
     let attempts = 0;
     const interval = setInterval(async () => {
       attempts++;
@@ -85,14 +85,16 @@ function PaymentModal({ request, onClose, onPaid }: { request: any; onClose: () 
           setStep("success");
           onPaid();
           toast({ title: "Payment confirmed!", description: "Your M-Pesa payment was received." });
-        } else if (data.paymentStatus === "failed" || attempts >= 36) {
+        } else if (data.paymentStatus === "failed" || attempts >= 72) {
           clearInterval(interval);
           setStep("failed");
         }
       } catch { /* keep polling */ }
     }, 5000);
     return () => clearInterval(interval);
-  }, [step, orderId]);
+  }, [orderId, step]);
+
+  const isPesapal = step === "pesapal";
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
@@ -101,21 +103,44 @@ function PaymentModal({ request, onClose, onPaid }: { request: any; onClose: () 
       <motion.div
         initial={{ y: 40, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 40, opacity: 0 }}
         transition={{ type: "spring", stiffness: 300, damping: 30 }}
-        className="bg-card border border-border rounded-t-3xl sm:rounded-3xl w-full sm:max-w-md shadow-2xl"
+        className={cn(
+          "bg-card border border-border rounded-t-3xl sm:rounded-3xl w-full shadow-2xl",
+          isPesapal ? "sm:max-w-lg" : "sm:max-w-md"
+        )}
       >
         <div className="flex justify-center pt-3 pb-1 sm:hidden"><div className="w-10 h-1 rounded-full bg-border" /></div>
 
-        <div className="p-6">
-          {/* Service info */}
-          <div className="flex items-center gap-3 mb-6 p-3.5 bg-secondary/40 rounded-xl border border-border">
-            <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
-              <Zap className="w-5 h-5 text-emerald-400" />
+        <div className={cn("p-6", isPesapal && "p-4")}>
+          {/* Header bar when showing Pesapal iframe */}
+          {isPesapal ? (
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <h3 className="font-bold text-base">Complete M-Pesa Payment</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Enter your number in the form below &amp; tap <strong>Proceed</strong>
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="text-xs font-semibold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-2.5 py-1">
+                  KES {request.paymentAmount?.toLocaleString()}
+                </div>
+                <button onClick={onClose} className="w-8 h-8 rounded-full bg-secondary/60 flex items-center justify-center hover:bg-secondary transition-colors">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
             </div>
-            <div>
-              <div className="font-semibold text-sm">{request.serviceName}</div>
-              <div className="text-xs text-muted-foreground">Amount due: <span className="font-bold text-emerald-400">KES {request.paymentAmount?.toLocaleString()}</span></div>
+          ) : (
+            /* Service info for non-iframe steps */
+            <div className="flex items-center gap-3 mb-6 p-3.5 bg-secondary/40 rounded-xl border border-border">
+              <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
+                <Zap className="w-5 h-5 text-emerald-400" />
+              </div>
+              <div>
+                <div className="font-semibold text-sm">{request.serviceName}</div>
+                <div className="text-xs text-muted-foreground">Amount due: <span className="font-bold text-emerald-400">KES {request.paymentAmount?.toLocaleString()}</span></div>
+              </div>
             </div>
-          </div>
+          )}
 
           <AnimatePresence mode="wait">
             {step === "phone" && (
@@ -125,23 +150,9 @@ function PaymentModal({ request, onClose, onPaid }: { request: any; onClose: () 
                     <Smartphone className="w-7 h-7 text-primary" />
                   </div>
                   <h3 className="text-lg font-bold">Pay via M-Pesa</h3>
-                  <p className="text-sm text-muted-foreground mt-1">Enter your M-Pesa phone number to receive a payment prompt</p>
+                  <p className="text-sm text-muted-foreground mt-1">Tap below to open the secure M-Pesa payment form</p>
                 </div>
                 <div className="space-y-4">
-                  <div>
-                    <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block mb-1.5">M-Pesa Phone Number</label>
-                    <div className="relative">
-                      <div className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground font-medium">🇰🇪 +254</div>
-                      <input
-                        type="tel"
-                        value={phone}
-                        onChange={e => setPhone(e.target.value)}
-                        placeholder="0712 345 678"
-                        className="w-full h-12 rounded-xl bg-secondary/50 border border-border pl-[72px] pr-4 text-sm focus:outline-none focus:border-primary/50 transition-colors"
-                        maxLength={12}
-                      />
-                    </div>
-                  </div>
                   <AnimatePresence>
                     {error && (
                       <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}
@@ -151,12 +162,12 @@ function PaymentModal({ request, onClose, onPaid }: { request: any; onClose: () 
                     )}
                   </AnimatePresence>
                   <div className="p-3 bg-emerald-500/5 border border-emerald-500/20 rounded-xl text-xs text-emerald-400/80 leading-relaxed">
-                    An STK push will be sent to your phone. Enter your M-Pesa PIN to complete the payment of <strong>KES {request.paymentAmount?.toLocaleString()}</strong>.
+                    A secure M-Pesa payment form will open. Enter your phone number and tap <strong>Proceed</strong> to receive the M-Pesa prompt.
                   </div>
                   <div className="flex gap-2.5">
                     <Button variant="outline" className="flex-1 h-11" onClick={onClose}>Cancel</Button>
                     <Button variant="gradient" className="flex-1 h-11 gap-2" onClick={initiatePayment}>
-                      <Lock className="w-4 h-4" /> Send STK Push
+                      <Lock className="w-4 h-4" /> Pay KES {request.paymentAmount?.toLocaleString()}
                     </Button>
                   </div>
                 </div>
@@ -172,8 +183,32 @@ function PaymentModal({ request, onClose, onPaid }: { request: any; onClose: () 
                     <Loader2 className="w-8 h-8 text-primary animate-spin" />
                   </div>
                 </div>
-                <h3 className="text-lg font-bold mb-2">Sending payment prompt…</h3>
-                <p className="text-sm text-muted-foreground">Please wait while we prepare your M-Pesa prompt.</p>
+                <h3 className="text-lg font-bold mb-2">Preparing payment…</h3>
+                <p className="text-sm text-muted-foreground">Opening secure M-Pesa payment form.</p>
+              </motion.div>
+            )}
+
+            {step === "pesapal" && redirectUrl && (
+              <motion.div key="pesapal" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                <div className="rounded-xl overflow-hidden border border-border bg-white" style={{ height: 480 }}>
+                  <iframe
+                    src={redirectUrl}
+                    width="100%"
+                    height="100%"
+                    style={{ border: "none", display: "block" }}
+                    title="M-Pesa Payment"
+                    allow="payment"
+                  />
+                </div>
+                <div className="mt-3 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    Waiting for payment…
+                  </div>
+                  <Button size="sm" variant="outline" className="gap-1.5 text-xs h-8 shrink-0" onClick={() => setStep("waiting")}>
+                    <Smartphone className="w-3.5 h-3.5" /> I've submitted
+                  </Button>
+                </div>
               </motion.div>
             )}
 
@@ -188,7 +223,7 @@ function PaymentModal({ request, onClose, onPaid }: { request: any; onClose: () 
                 </div>
                 <h3 className="text-lg font-bold mb-2">Check your phone</h3>
                 <p className="text-sm text-muted-foreground leading-relaxed">
-                  An M-Pesa prompt has been sent to <strong className="text-foreground">{phone}</strong>.<br />
+                  An M-Pesa prompt was sent to your phone.<br />
                   Enter your PIN to pay <strong className="text-emerald-400">KES {request.paymentAmount?.toLocaleString()}</strong>.
                 </p>
                 <div className="mt-4 flex items-center justify-center gap-2 text-xs text-muted-foreground">
