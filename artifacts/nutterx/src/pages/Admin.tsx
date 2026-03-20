@@ -649,7 +649,7 @@ async function exportAsPNG(requests: any[]) {
   const HEADER_H = 132;
   const STATS_H  = 60;
   const TH_H     = 30;
-  const ROW_H    = 44;   // 2-line row: name/service/status + amount/date
+  const ROW_H    = 32;   // single-line row (no payment amounts shown)
   const FOOTER_H = 82;
 
   const totalH = HEADER_H + STATS_H + TH_H + requests.length * ROW_H + FOOTER_H;
@@ -770,14 +770,13 @@ async function exportAsPNG(requests: any[]) {
   ctx.strokeStyle = GOLD_LIGHT; ctx.lineWidth = 0.8;
   ctx.beginPath(); ctx.moveTo(PAD, 114); ctx.lineTo(LW - PAD, 114); ctx.stroke();
 
-  // ── Stats row ─────────────────────────────────────────────────
+  // ── Stats row (no payment totals) ────────────────────────────
   const statsData = [
-    { label: "Total",    value: requests.length,                                                 },
-    { label: "Active",   value: requests.filter((r: any) => r.status === "in_progress").length, },
-    { label: "Done",     value: requests.filter((r: any) => r.status === "completed").length,   },
-    { label: "Paid",     value: requests.filter((r: any) => r.paymentStatus === "paid").length, },
+    { label: "Total",    value: requests.length },
+    { label: "Active",   value: requests.filter((r: any) => r.status === "in_progress").length },
+    { label: "Done",     value: requests.filter((r: any) => r.status === "completed").length },
   ];
-  const SW    = (LW - PAD * 2 - 9) / 4;
+  const SW    = (LW - PAD * 2 - 6) / 3;
   const SY    = HEADER_H - 8;
   const statBg = ctx.createLinearGradient(0, SY, 0, SY + 46);
   statBg.addColorStop(0, "#fdf5d0");
@@ -854,66 +853,37 @@ async function exportAsPNG(requests: any[]) {
     const rowY  = tableTop + TH_H + i * ROW_H;
     const isEven = i % 2 === 0;
     const user  = req.user as any;
-    const paid  = req.paymentStatus === "paid";
     const endDate = fmtDate(req.subscriptionEndsAt);
 
     // Row background
     ctx.fillStyle = isEven ? CREAM : ROW_ALT;
     ctx.fillRect(PAD, rowY, CW, ROW_H);
 
-    // Gold left accent bar for paid rows
-    if (paid) {
-      const paidBar = ctx.createLinearGradient(0, rowY, 0, rowY + ROW_H);
-      paidBar.addColorStop(0, GOLD_BRIGHT);
-      paidBar.addColorStop(1, GOLD_MID);
-      ctx.fillStyle = paidBar;
-      ctx.fillRect(PAD, rowY, 3, ROW_H);
-    }
-
     // Row separator
     ctx.strokeStyle = GOLD_LIGHT; ctx.lineWidth = 0.5;
     ctx.beginPath(); ctx.moveTo(PAD, rowY + ROW_H); ctx.lineTo(PAD + CW, rowY + ROW_H); ctx.stroke();
 
-    const L1 = rowY + ROW_H * 0.38;
-    const L2 = rowY + ROW_H * 0.76;
+    const MID = rowY + ROW_H * 0.62; // single-line vertical centre
 
     // # number
     ctx.fillStyle = GOLD_MID; ctx.font = "bold 8.5px sans-serif"; ctx.textAlign = "center";
-    ctx.fillText(String(i + 1), C_NUM.x + C_NUM.w / 2, L1);
+    ctx.fillText(String(i + 1), C_NUM.x + C_NUM.w / 2, MID);
 
     // Name
-    ctx.fillStyle = TEXT_DARK; ctx.font = "bold 9px sans-serif"; ctx.textAlign = "left";
-    ctx.fillText(trunc(user?.name || "—", 16), C_NAME.x + 4, L1);
-
-    // KES amount line 2
-    if (req.paymentRequired) {
-      const amtStr = `KES ${(req.paymentAmount || 0).toLocaleString()}`;
-      const tag    = paid ? " · Paid ✓" : " · Pending";
-      ctx.fillStyle = paid ? "#0a5020" : "#7a4000";
-      ctx.font = "bold 7.5px sans-serif";
-      ctx.fillText(`${amtStr}${tag}`, C_NAME.x + 4, L2);
-    } else {
-      ctx.fillStyle = TEXT_MUTED; ctx.font = "7.5px sans-serif";
-      ctx.fillText("No payment", C_NAME.x + 4, L2);
-    }
+    ctx.fillStyle = TEXT_DARK; ctx.font = "bold 8.5px sans-serif"; ctx.textAlign = "left";
+    ctx.fillText(trunc(user?.name || "—", 16), C_NAME.x + 4, MID);
 
     // Service
-    ctx.fillStyle = TEXT_MID; ctx.font = "8.5px sans-serif";
-    ctx.fillText(trunc(req.serviceName, 14), C_SVC.x + 4, L1);
+    ctx.fillStyle = TEXT_MID; ctx.font = "8px sans-serif";
+    ctx.fillText(trunc(req.serviceName, 14), C_SVC.x + 4, MID);
 
     // Status
     ctx.fillStyle = statusColor[req.status] || TEXT_MUTED;
-    ctx.font = "bold 8.5px sans-serif";
-    ctx.fillText(statusLabel[req.status] || req.status || "—", C_STAT.x + 4, L1);
+    ctx.font = "bold 8px sans-serif";
+    const statusTxt = statusLabel[req.status] || req.status || "—";
+    const endDateTxt = endDate ? `  · Ends ${endDate}` : "";
+    ctx.fillText(statusTxt + endDateTxt, C_STAT.x + 4, MID);
 
-    // End date
-    if (endDate) {
-      ctx.fillStyle = TEXT_MUTED; ctx.font = "7.5px sans-serif";
-      ctx.fillText(`Ends ${endDate}`, C_STAT.x + 4, L2);
-    } else {
-      ctx.fillStyle = GOLD_LIGHT; ctx.font = "7.5px sans-serif";
-      ctx.fillText("No deadline", C_STAT.x + 4, L2);
-    }
     ctx.textAlign = "left";
   });
 

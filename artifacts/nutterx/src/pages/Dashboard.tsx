@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 import {
   Plus, Clock, FileText, CheckCircle, Loader2, X,
   MessageSquare, Globe, TrendingUp, Send, ShoppingCart, Zap,
-  ChevronRight, Smartphone, Lock, CheckCircle2, AlertCircle
+  ChevronRight, Smartphone, Lock, CheckCircle2, AlertCircle, Award
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useForm } from "react-hook-form";
@@ -264,6 +264,275 @@ function PaymentModal({ request, onClose, onPaid }: { request: any; onClose: () 
   );
 }
 
+// ── Membership Certificate PNG ───────────────────────────────
+function downloadMembershipCertificate(user: any, requests: any[]) {
+  const S    = 2;
+  const LW   = 390;
+  const W    = LW * S;
+  const PAD  = 20;
+
+  const paidServices = (requests || []).filter(r => r.paymentStatus === "paid");
+  const totalPaid    = paidServices.reduce((sum: number, r: any) => sum + (r.paymentAmount || 0), 0);
+
+  const ROW_H    = 38;
+  const HEADER_H = 170;
+  const TABLE_H  = 28 + paidServices.length * ROW_H + (paidServices.length === 0 ? 36 : 0);
+  const FOOTER_H = 100;
+  const totalH   = HEADER_H + TABLE_H + FOOTER_H;
+  const LH       = Math.max(totalH, 360);
+  const H        = LH * S;
+
+  const canvas = document.createElement("canvas");
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext("2d")!;
+  ctx.scale(S, S);
+
+  // ── Gold palette ──────────────────────────────
+  const CREAM        = "#fefcf0";
+  const PARCHMENT    = "#f9f0d0";
+  const GOLD_DARK    = "#7a5200";
+  const GOLD_MID     = "#c89000";
+  const GOLD_BRIGHT  = "#e8b420";
+  const GOLD_LIGHT   = "#f5d878";
+  const TEXT_DARK    = "#1a0800";
+  const TEXT_MID     = "#3d2000";
+  const TEXT_MUTED   = "#7a5c1a";
+  const ROW_ALT      = "#fdf3cc";
+
+  // ── Background ────────────────────────────────
+  const bg = ctx.createLinearGradient(0, 0, 0, LH);
+  bg.addColorStop(0, CREAM);
+  bg.addColorStop(0.5, "#fffef5");
+  bg.addColorStop(1, PARCHMENT);
+  ctx.fillStyle = bg; ctx.fillRect(0, 0, LW, LH);
+
+  // ── Outer gold border ─────────────────────────
+  ctx.strokeStyle = GOLD_MID; ctx.lineWidth = 5;
+  ctx.strokeRect(5, 5, LW - 10, LH - 10);
+
+  // ── Inner dashed border ───────────────────────
+  ctx.save();
+  ctx.strokeStyle = GOLD_BRIGHT; ctx.lineWidth = 1;
+  ctx.setLineDash([5, 4]);
+  ctx.strokeRect(11, 11, LW - 22, LH - 22);
+  ctx.setLineDash([]);
+  ctx.restore();
+
+  // ── Corner diamonds ───────────────────────────
+  ([[14,14],[LW-14,14],[14,LH-14],[LW-14,LH-14]] as [number,number][]).forEach(([cx,cy]) => {
+    ctx.fillStyle = GOLD_BRIGHT;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy-5); ctx.lineTo(cx+5,cy); ctx.lineTo(cx,cy+5); ctx.lineTo(cx-5,cy);
+    ctx.closePath(); ctx.fill();
+  });
+
+  // ── Diagonal watermark ────────────────────────
+  ctx.save();
+  ctx.translate(LW/2, LH/2 + 20);
+  ctx.rotate(-32 * Math.PI / 180);
+  ctx.globalAlpha = 0.05;
+  ctx.fillStyle = GOLD_DARK;
+  ctx.font = "bold 52px sans-serif"; ctx.textAlign = "center";
+  ctx.fillText("NUTTERX", 0, 0);
+  ctx.font = "bold 24px sans-serif";
+  ctx.fillText("TECHNOLOGIES", 0, 40);
+  ctx.restore();
+
+  // ── Header: Logo badge ────────────────────────
+  const LCX = LW / 2, LCY = 32, LR = 18;
+  const lgGrad = ctx.createRadialGradient(LCX-4, LCY-4, 2, LCX, LCY, LR);
+  lgGrad.addColorStop(0, GOLD_BRIGHT); lgGrad.addColorStop(0.6, GOLD_MID); lgGrad.addColorStop(1, GOLD_DARK);
+  ctx.fillStyle = lgGrad;
+  ctx.beginPath(); ctx.arc(LCX, LCY, LR, 0, Math.PI*2); ctx.fill();
+  ctx.strokeStyle = GOLD_BRIGHT; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.arc(LCX, LCY, LR+3, 0, Math.PI*2); ctx.stroke();
+  ctx.fillStyle = TEXT_DARK; ctx.font = "bold 15px sans-serif"; ctx.textAlign = "center";
+  ctx.fillText("N", LCX, LCY + 6);
+
+  // ── Company name ──────────────────────────────
+  const gTitle = ctx.createLinearGradient(LW*0.2, 0, LW*0.8, 0);
+  gTitle.addColorStop(0, GOLD_DARK); gTitle.addColorStop(0.5, GOLD_BRIGHT); gTitle.addColorStop(1, GOLD_DARK);
+  ctx.fillStyle = gTitle; ctx.font = "bold 12px sans-serif"; ctx.textAlign = "center";
+  ctx.fillText("NUTTERX TECHNOLOGIES", LCX, 70);
+
+  // ── "MEMBERSHIP CERTIFICATE" subtitle ────────
+  ctx.fillStyle = TEXT_MID; ctx.font = "9px sans-serif";
+  ctx.fillText("MEMBERSHIP  CERTIFICATE", LCX, 84);
+
+  // ── Ornament line ─────────────────────────────
+  const ornY = 93;
+  ctx.strokeStyle = GOLD_MID; ctx.lineWidth = 0.8;
+  ctx.beginPath(); ctx.moveTo(PAD+30, ornY); ctx.lineTo(LW/2-14, ornY); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(LW/2+14, ornY); ctx.lineTo(LW-PAD-30, ornY); ctx.stroke();
+  ctx.fillStyle = GOLD_BRIGHT;
+  ctx.beginPath(); ctx.moveTo(LW/2,ornY-4); ctx.lineTo(LW/2+5,ornY); ctx.lineTo(LW/2,ornY+4); ctx.lineTo(LW/2-5,ornY); ctx.closePath(); ctx.fill();
+
+  // ── Member name (large) ───────────────────────
+  ctx.textAlign = "center";
+  const nameGrad = ctx.createLinearGradient(LW*0.1, 0, LW*0.9, 0);
+  nameGrad.addColorStop(0, GOLD_DARK); nameGrad.addColorStop(0.5, "#a06800"); nameGrad.addColorStop(1, GOLD_DARK);
+  ctx.fillStyle = nameGrad; ctx.font = "bold 18px sans-serif";
+  ctx.fillText((user?.name || "Member").toUpperCase(), LCX, 118);
+
+  // ── "This certifies that..." text ────────────
+  ctx.fillStyle = TEXT_MID; ctx.font = "8px sans-serif";
+  ctx.fillText("This certifies that the above named is a registered member of Nutterx Technologies", LCX, 132);
+
+  // ── Member ID + Date ──────────────────────────
+  const memberId = `NTX-${(user?._id || "").toString().slice(-6).toUpperCase() || "000000"}`;
+  const joinDate = user?.createdAt
+    ? new Date(user.createdAt).toLocaleDateString("en-KE", { day:"2-digit", month:"long", year:"numeric" })
+    : new Date().toLocaleDateString("en-KE", { day:"2-digit", month:"long", year:"numeric" });
+  ctx.fillStyle = GOLD_DARK; ctx.font = "bold 8px sans-serif";
+  ctx.textAlign = "left";  ctx.fillText(`Member ID: ${memberId}`, PAD + 4, 148);
+  ctx.textAlign = "right"; ctx.fillText(`Member since: ${joinDate}`, LW - PAD - 4, 148);
+
+  // ── Divider ───────────────────────────────────
+  ctx.strokeStyle = GOLD_LIGHT; ctx.lineWidth = 0.8;
+  ctx.beginPath(); ctx.moveTo(PAD, 156); ctx.lineTo(LW-PAD, 156); ctx.stroke();
+
+  // ── "PAID SERVICES" table label ───────────────
+  ctx.fillStyle = TEXT_MID; ctx.font = "bold 8px sans-serif"; ctx.textAlign = "left";
+  ctx.fillText("PAID SERVICES", PAD + 4, 168);
+
+  // ── Table header ──────────────────────────────
+  const tableTop = HEADER_H;
+  const CW = LW - PAD * 2;
+  const C_NUM  = { x: PAD,       w: 20 };
+  const C_SVC  = { x: PAD + 20,  w: 160 };
+  const C_AMT  = { x: PAD + 180, w: 100 };
+  const C_DATE = { x: PAD + 280, w: CW - 280 };
+
+  const thBg = ctx.createLinearGradient(0, tableTop, LW, tableTop);
+  thBg.addColorStop(0, GOLD_DARK); thBg.addColorStop(0.5, GOLD_MID); thBg.addColorStop(1, GOLD_DARK);
+  ctx.fillStyle = thBg;
+  ctx.beginPath(); ctx.roundRect(PAD, tableTop, CW, 28, [5,5,0,0]); ctx.fill();
+
+  ctx.fillStyle = PARCHMENT; ctx.font = "bold 7.5px sans-serif";
+  const heads: { label: string; cx: number; align: CanvasTextAlign }[] = [
+    { label: "#",       cx: C_NUM.x + C_NUM.w/2, align: "center" },
+    { label: "SERVICE", cx: C_SVC.x + 4,         align: "left"   },
+    { label: "AMOUNT",  cx: C_AMT.x + 4,         align: "left"   },
+    { label: "ENDS",    cx: C_DATE.x + 4,        align: "left"   },
+  ];
+  heads.forEach(h => { ctx.textAlign = h.align; ctx.fillText(h.label, h.cx, tableTop + 19); });
+  ctx.textAlign = "left";
+
+  // ── Service rows ──────────────────────────────
+  if (paidServices.length === 0) {
+    ctx.fillStyle = TEXT_MUTED; ctx.font = "8px sans-serif"; ctx.textAlign = "center";
+    ctx.fillText("No paid services yet", LCX, tableTop + 28 + 20);
+    ctx.textAlign = "left";
+  } else {
+    const fmtDate = (d: string | undefined) => {
+      if (!d) return "—";
+      return new Date(d).toLocaleDateString("en-KE", { day:"2-digit", month:"short", year:"numeric" });
+    };
+    const trunc = (s: string, n: number) => !s ? "—" : s.length > n ? s.slice(0,n)+"…" : s;
+
+    paidServices.forEach((r: any, i: number) => {
+      const rowY   = tableTop + 28 + i * ROW_H;
+      const isEven = i % 2 === 0;
+      const MID    = rowY + ROW_H * 0.58;
+
+      ctx.fillStyle = isEven ? CREAM : ROW_ALT;
+      ctx.fillRect(PAD, rowY, CW, ROW_H);
+
+      // Gold left accent bar (all paid)
+      const bar = ctx.createLinearGradient(0, rowY, 0, rowY + ROW_H);
+      bar.addColorStop(0, GOLD_BRIGHT); bar.addColorStop(1, GOLD_MID);
+      ctx.fillStyle = bar; ctx.fillRect(PAD, rowY, 3, ROW_H);
+
+      ctx.strokeStyle = GOLD_LIGHT; ctx.lineWidth = 0.5;
+      ctx.beginPath(); ctx.moveTo(PAD, rowY+ROW_H); ctx.lineTo(PAD+CW, rowY+ROW_H); ctx.stroke();
+
+      // #
+      ctx.fillStyle = GOLD_MID; ctx.font = "bold 8px sans-serif"; ctx.textAlign = "center";
+      ctx.fillText(String(i+1), C_NUM.x + C_NUM.w/2, MID);
+
+      // Service name (2 lines if long)
+      ctx.fillStyle = TEXT_DARK; ctx.font = "bold 8px sans-serif"; ctx.textAlign = "left";
+      ctx.fillText(trunc(r.serviceName, 20), C_SVC.x + 4, MID);
+
+      // Amount
+      ctx.fillStyle = "#0a5020"; ctx.font = "bold 8px sans-serif";
+      ctx.fillText(`KES ${(r.paymentAmount || 0).toLocaleString()} ✓`, C_AMT.x + 4, MID);
+
+      // End date
+      ctx.fillStyle = TEXT_MUTED; ctx.font = "7.5px sans-serif";
+      ctx.fillText(fmtDate(r.subscriptionEndsAt), C_DATE.x + 4, MID);
+
+      ctx.textAlign = "left";
+    });
+  }
+
+  // Table outer border
+  const tableBodyH = 28 + (paidServices.length > 0 ? paidServices.length * ROW_H : 36);
+  ctx.strokeStyle = GOLD_MID; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.roundRect(PAD, tableTop, CW, tableBodyH, [5,5,0,0]); ctx.stroke();
+
+  // Column dividers
+  ctx.strokeStyle = GOLD_LIGHT; ctx.lineWidth = 0.7;
+  [C_SVC.x, C_AMT.x, C_DATE.x].forEach(cx => {
+    ctx.beginPath(); ctx.moveTo(cx, tableTop); ctx.lineTo(cx, tableTop + tableBodyH); ctx.stroke();
+  });
+
+  // ── Total paid ────────────────────────────────
+  const totalY = tableTop + tableBodyH;
+  const totBg  = ctx.createLinearGradient(0, totalY, LW, totalY);
+  totBg.addColorStop(0, "#fae8a0"); totBg.addColorStop(1, "#fdf5d0");
+  ctx.fillStyle = totBg; ctx.fillRect(PAD, totalY, CW, 28);
+  ctx.strokeStyle = GOLD_MID; ctx.lineWidth = 1;
+  ctx.strokeRect(PAD, totalY, CW, 28);
+  ctx.fillStyle = TEXT_DARK; ctx.font = "bold 9px sans-serif"; ctx.textAlign = "left";
+  ctx.fillText("TOTAL PAID", PAD + 10, totalY + 18);
+  const totGrad = ctx.createLinearGradient(LW*0.5, 0, LW*0.95, 0);
+  totGrad.addColorStop(0, GOLD_DARK); totGrad.addColorStop(1, GOLD_BRIGHT);
+  ctx.fillStyle = totGrad; ctx.font = "bold 11px sans-serif"; ctx.textAlign = "right";
+  ctx.fillText(`KES ${totalPaid.toLocaleString()}`, LW - PAD - 10, totalY + 18);
+  ctx.textAlign = "left";
+
+  // ── Footer ────────────────────────────────────
+  const FY = totalY + 28;
+
+  ctx.strokeStyle = GOLD_MID; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(PAD, FY + 14); ctx.lineTo(LW - PAD, FY + 14); ctx.stroke();
+
+  // Seal
+  const SC_X = LW - 46, SC_Y = FY + 54, SC_R = 28;
+  const sealBg = ctx.createRadialGradient(SC_X-6, SC_Y-6, 3, SC_X, SC_Y, SC_R);
+  sealBg.addColorStop(0, GOLD_LIGHT); sealBg.addColorStop(0.6, GOLD_MID); sealBg.addColorStop(1, GOLD_DARK);
+  ctx.fillStyle = sealBg;
+  ctx.beginPath(); ctx.arc(SC_X, SC_Y, SC_R, 0, Math.PI*2); ctx.fill();
+  ctx.strokeStyle = GOLD_BRIGHT; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.arc(SC_X, SC_Y, SC_R-4, 0, Math.PI*2); ctx.stroke();
+  ctx.fillStyle = TEXT_DARK; ctx.font = "bold 16px sans-serif"; ctx.textAlign = "center";
+  ctx.fillText("N", SC_X, SC_Y + 7);
+  ctx.fillStyle = CREAM; ctx.font = "5.5px sans-serif";
+  ctx.fillText("MEMBER", SC_X, SC_Y + 19);
+
+  // Footer text
+  ctx.textAlign = "left";
+  ctx.fillStyle = TEXT_DARK; ctx.font = "bold 8.5px sans-serif";
+  ctx.fillText("Nutterx Technologies", PAD + 4, FY + 30);
+  ctx.fillStyle = TEXT_MID; ctx.font = "7.5px sans-serif";
+  ctx.fillText("Official Membership Certificate", PAD + 4, FY + 43);
+  ctx.fillStyle = GOLD_MID; ctx.font = "7px sans-serif";
+  ctx.fillText(`nutterx.tech  ·  Generated ${new Date().toLocaleDateString("en-KE")}`, PAD + 4, FY + 57);
+  ctx.fillStyle = TEXT_MUTED; ctx.font = "6.5px sans-serif";
+  ctx.fillText("This document is auto-generated and reflects live account data.", PAD + 4, FY + 70);
+
+  canvas.toBlob(blob => {
+    if (!blob) return;
+    const url = URL.createObjectURL(blob);
+    const a   = document.createElement("a");
+    a.href = url;
+    a.download = `nutterx-membership-${user?.name?.replace(/\s+/g,"-").toLowerCase() || "certificate"}.png`;
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a); URL.revokeObjectURL(url);
+  }, "image/png");
+}
+
 // ── Main Dashboard ───────────────────────────────────────────
 export default function Dashboard() {
   const { user } = useAuth();
@@ -332,7 +601,14 @@ export default function Dashboard() {
             <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Welcome, {user?.name?.split(" ")[0]}</h1>
             <p className="text-muted-foreground text-sm mt-1">Manage your services and track progress</p>
           </div>
-          <div className="flex gap-2.5">
+          <div className="flex gap-2 flex-wrap justify-end">
+            <Button
+              variant="outline" size="sm"
+              onClick={() => downloadMembershipCertificate(user, requests || [])}
+              className="gap-2 h-9 border-amber-500/40 text-amber-500 hover:bg-amber-500/8 hover:border-amber-500/60"
+            >
+              <Award className="w-3.5 h-3.5" /> My Certificate
+            </Button>
             <Button variant="outline" size="sm" onClick={() => navigate("/chat")} className="gap-2 h-9">
               <MessageSquare className="w-3.5 h-3.5" /> Support
             </Button>
