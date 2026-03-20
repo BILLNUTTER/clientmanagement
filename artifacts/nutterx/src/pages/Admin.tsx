@@ -648,8 +648,8 @@ async function exportAsPNG(requests: any[]) {
   const PAD = 16;
   const HEADER_H = 104;
   const STATS_H  = 58;
-  const TH_H     = 30;   // table header row
-  const ROW_H    = 28;   // data row height
+  const TH_H     = 30;   // table header row height
+  const ROW_H    = 42;   // data row height (2-line: primary + amount/date)
   const FOOTER_H = 46;
 
   const totalH = HEADER_H + STATS_H + TH_H + requests.length * ROW_H + FOOTER_H;
@@ -725,33 +725,39 @@ async function exportAsPNG(requests: any[]) {
   });
   ctx.textAlign = "left";
 
-  // ── Table columns definition ─────────────────────────────────
+  // ── Table layout ──────────────────────────────────────────────
+  // Rows are 2-line: primary info on line 1, amount + end date on line 2
   const tableTop = HEADER_H + STATS_H;
-  const CW = LW - PAD * 2; // 358
-  const cols = [
-    { label: "#",        x: PAD,             w: 22,  align: "center" as const },
-    { label: "Name",     x: PAD + 22,        w: 102, align: "left"   as const },
-    { label: "Service",  x: PAD + 124,       w: 96,  align: "left"   as const },
-    { label: "Status",   x: PAD + 220,       w: 68,  align: "left"   as const },
-    { label: "KES",      x: PAD + 288,       w: 70,  align: "right"  as const },
-  ];
+  const CW = LW - PAD * 2; // 358px content width
 
-  // ── Table header row ─────────────────────────────────────────
+  // Column x positions and widths
+  const C_NUM  = { x: PAD,       w: 22  }; // #
+  const C_NAME = { x: PAD + 22,  w: 118 }; // Name / KES amount (line 2)
+  const C_SVC  = { x: PAD + 140, w: 106 }; // Service / (empty line 2)
+  const C_STAT = { x: PAD + 246, w: 112 }; // Status / End date (line 2)
+  // 22+118+106+112 = 358 ✓
+
+  // ── Table header ─────────────────────────────────────────────
   const thGrad = ctx.createLinearGradient(0, tableTop, LW, tableTop);
-  thGrad.addColorStop(0, "rgba(59,130,246,0.18)");
-  thGrad.addColorStop(1, "rgba(99,102,241,0.10)");
+  thGrad.addColorStop(0, "rgba(59,130,246,0.20)");
+  thGrad.addColorStop(1, "rgba(99,102,241,0.12)");
   ctx.fillStyle = thGrad;
   ctx.beginPath(); ctx.roundRect(PAD, tableTop, CW, TH_H, [6, 6, 0, 0]); ctx.fill();
 
-  ctx.fillStyle = "#7dd3fc"; ctx.font = "bold 9.5px sans-serif";
-  cols.forEach(col => {
-    const tx = col.align === "right" ? col.x + col.w : col.align === "center" ? col.x + col.w / 2 : col.x + 4;
-    ctx.textAlign = col.align;
-    ctx.fillText(col.label, tx, tableTop + 19);
+  ctx.fillStyle = "#7dd3fc"; ctx.font = "bold 8.5px sans-serif";
+  const headers = [
+    { label: "#",          cx: C_NUM.x  + C_NUM.w  / 2, align: "center" as const },
+    { label: "Client Name",cx: C_NAME.x + 3,             align: "left"   as const },
+    { label: "Service",    cx: C_SVC.x  + 3,             align: "left"   as const },
+    { label: "Status / Ends", cx: C_STAT.x + 3,          align: "left"   as const },
+  ];
+  headers.forEach(h => {
+    ctx.textAlign = h.align;
+    ctx.fillText(h.label, h.cx, tableTop + 20);
   });
   ctx.textAlign = "left";
 
-  // ── Data rows ────────────────────────────────────────────────
+  // ── Data rows (2-line each) ────────────────────────────────────
   const statusColor: Record<string, string> = {
     completed:   "#34d399",
     in_progress: "#60a5fa",
@@ -759,56 +765,78 @@ async function exportAsPNG(requests: any[]) {
     cancelled:   "#f87171",
   };
   const statusLabel: Record<string, string> = {
-    completed:   "Done",
+    completed:   "Completed",
     in_progress: "Active",
     pending:     "Pending",
     cancelled:   "Cancelled",
   };
 
-  const truncate = (s: string, n: number) => !s ? "—" : s.length > n ? s.slice(0, n) + "…" : s;
+  const trunc = (s: string, n: number) => !s ? "—" : s.length > n ? s.slice(0, n) + "…" : s;
+  const fmtDate = (d: string | undefined) => {
+    if (!d) return null;
+    const dt = new Date(d);
+    return dt.toLocaleDateString("en-KE", { day: "2-digit", month: "short", year: "numeric" });
+  };
 
   requests.forEach((req: any, i: number) => {
     const rowY = tableTop + TH_H + i * ROW_H;
     const isEven = i % 2 === 0;
     const user = req.user as any;
+    const paid = req.paymentStatus === "paid";
+    const endDate = fmtDate(req.subscriptionEndsAt);
 
-    // Row background
-    ctx.fillStyle = isEven ? "rgba(255,255,255,0.028)" : "rgba(0,0,0,0.12)";
+    // ── Row background ─────────────────────────────────────────
+    ctx.fillStyle = isEven ? "rgba(255,255,255,0.028)" : "rgba(0,0,0,0.10)";
     ctx.fillRect(PAD, rowY, CW, ROW_H);
 
-    // Row bottom border
+    // Left accent bar for paid rows
+    if (paid) {
+      ctx.fillStyle = "rgba(52,211,153,0.18)";
+      ctx.fillRect(PAD, rowY, 3, ROW_H);
+    }
+
+    // Bottom border
     ctx.strokeStyle = "rgba(255,255,255,0.04)"; ctx.lineWidth = 0.5;
     ctx.beginPath(); ctx.moveTo(PAD, rowY + ROW_H); ctx.lineTo(PAD + CW, rowY + ROW_H); ctx.stroke();
 
-    const midY = rowY + ROW_H * 0.62;
+    const L1 = rowY + ROW_H * 0.38; // line 1 baseline
+    const L2 = rowY + ROW_H * 0.76; // line 2 baseline
 
-    // # (row number)
-    ctx.fillStyle = "#3b82f6"; ctx.font = "bold 9px sans-serif"; ctx.textAlign = "center";
-    ctx.fillText(String(i + 1), PAD + 11, midY);
+    // ── # ─────────────────────────────────────────────────────
+    ctx.fillStyle = "#3b82f6"; ctx.font = "bold 8.5px sans-serif"; ctx.textAlign = "center";
+    ctx.fillText(String(i + 1), C_NUM.x + C_NUM.w / 2, L1);
 
-    // Name
-    ctx.fillStyle = "#e2e8f0"; ctx.font = "bold 9.5px sans-serif"; ctx.textAlign = "left";
-    ctx.fillText(truncate(user?.name || "—", 14), PAD + 26, midY);
+    // ── Name (line 1) ─────────────────────────────────────────
+    ctx.fillStyle = "#e2e8f0"; ctx.font = "bold 9px sans-serif"; ctx.textAlign = "left";
+    ctx.fillText(trunc(user?.name || "—", 16), C_NAME.x + 3, L1);
 
-    // Service
-    ctx.fillStyle = "#94a3b8"; ctx.font = "9px sans-serif";
-    ctx.fillText(truncate(req.serviceName, 14), PAD + 128, midY);
-
-    // Status (colored)
-    const sc = statusColor[req.status] || "#94a3b8";
-    ctx.fillStyle = sc; ctx.font = "bold 9px sans-serif";
-    ctx.fillText(statusLabel[req.status] || req.status || "—", PAD + 224, midY);
-
-    // KES amount
-    ctx.textAlign = "right";
+    // ── KES Amount (line 2 under Name) ────────────────────────
     if (req.paymentRequired) {
-      const paid = req.paymentStatus === "paid";
-      ctx.fillStyle = paid ? "#34d399" : "#fbbf24";
-      ctx.font = paid ? "bold 9px sans-serif" : "9px sans-serif";
-      ctx.fillText(paid ? `✓ ${(req.paymentAmount || 0).toLocaleString()}` : `${(req.paymentAmount || 0).toLocaleString()}`, PAD + 358, midY);
+      const amtStr = `KES ${(req.paymentAmount || 0).toLocaleString()}`;
+      const tag = paid ? " · Paid ✓" : " · Pending";
+      const pColor = paid ? "#34d399" : "#fbbf24";
+      ctx.fillStyle = pColor; ctx.font = `bold 7.5px sans-serif`;
+      ctx.fillText(`${amtStr}${tag}`, C_NAME.x + 3, L2);
     } else {
-      ctx.fillStyle = "#334155"; ctx.font = "9px sans-serif";
-      ctx.fillText("—", PAD + 358, midY);
+      ctx.fillStyle = "#334155"; ctx.font = "7.5px sans-serif";
+      ctx.fillText("No payment required", C_NAME.x + 3, L2);
+    }
+
+    // ── Service (line 1) ──────────────────────────────────────
+    ctx.fillStyle = "#94a3b8"; ctx.font = "8.5px sans-serif"; ctx.textAlign = "left";
+    ctx.fillText(trunc(req.serviceName, 14), C_SVC.x + 3, L1);
+
+    // ── Status (line 1) + End date (line 2) ───────────────────
+    const sc = statusColor[req.status] || "#94a3b8";
+    ctx.fillStyle = sc; ctx.font = "bold 8.5px sans-serif";
+    ctx.fillText(statusLabel[req.status] || req.status || "—", C_STAT.x + 3, L1);
+
+    if (endDate) {
+      ctx.fillStyle = "#64748b"; ctx.font = "7.5px sans-serif";
+      ctx.fillText(`Ends ${endDate}`, C_STAT.x + 3, L2);
+    } else {
+      ctx.fillStyle = "#1e3a5f"; ctx.font = "7.5px sans-serif";
+      ctx.fillText("No deadline set", C_STAT.x + 3, L2);
     }
     ctx.textAlign = "left";
   });
@@ -818,9 +846,9 @@ async function exportAsPNG(requests: any[]) {
   const tableH = TH_H + requests.length * ROW_H;
   ctx.beginPath(); ctx.roundRect(PAD, tableTop, CW, tableH, [6, 6, 0, 0]); ctx.stroke();
 
-  // Column dividers in header only
+  // Column dividers
   ctx.strokeStyle = "rgba(255,255,255,0.05)"; ctx.lineWidth = 0.5;
-  [PAD + 22, PAD + 124, PAD + 220, PAD + 288].forEach(cx => {
+  [C_NAME.x, C_SVC.x, C_STAT.x].forEach(cx => {
     ctx.beginPath(); ctx.moveTo(cx, tableTop); ctx.lineTo(cx, tableTop + tableH); ctx.stroke();
   });
 
