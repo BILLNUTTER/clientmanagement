@@ -3,8 +3,11 @@ import { authenticate, AuthRequest } from "../../middlewares/auth";
 import { ServiceRequest } from "../../models/ServiceRequest";
 import { Settings } from "../../models/Settings";
 import { logger } from "../../lib/logger";
+import puppeteer from "puppeteer-core";
 
 const router = Router();
+
+const CHROMIUM_PATH = "/nix/store/qa9cnw4v5xkxyip6mb9kxqfq1z4x2dx1-chromium-138.0.7204.100/bin/chromium";
 
 // ── In-memory caches ─────────────────────────────────────────
 let tokenCache: { token: string; expiresAt: number; sandbox: boolean } | null = null;
@@ -35,7 +38,6 @@ function pesapalBase(sandbox: boolean): string {
 }
 
 async function getPesapalToken(consumerKey: string, consumerSecret: string, sandbox: boolean): Promise<string> {
-  // Return cached token if still valid (with 60s buffer)
   if (tokenCache && tokenCache.sandbox === sandbox && tokenCache.expiresAt > Date.now() + 60_000) {
     return tokenCache.token;
   }
@@ -63,14 +65,12 @@ async function getPesapalToken(consumerKey: string, consumerSecret: string, sand
     throw new Error(`Pesapal returned no token. Response: ${JSON.stringify(data)}`);
   }
 
-  // Cache token until its expiry
   const expiresAt = data.expiryDate ? new Date(data.expiryDate).getTime() : Date.now() + 4 * 60_000;
   tokenCache = { token: data.token, expiresAt, sandbox };
   return data.token;
 }
 
 async function registerIPN(token: string, ipnUrl: string, sandbox: boolean): Promise<string> {
-  // Return cached IPN ID if same mode
   if (ipnCache && ipnCache.sandbox === sandbox) {
     return ipnCache.id;
   }
@@ -90,6 +90,71 @@ async function registerIPN(token: string, ipnUrl: string, sandbox: boolean): Pro
   const id = data.ipn_id || "";
   if (id) ipnCache = { id, sandbox };
   return id;
+}
+
+// ── Headless browser: auto-fill Pesapal page and trigger STK push ──
+async function triggerSTKPushHeadless(redirectUrl: string, rawPhone: string): Promise<void> {
+  // Normalise to 9 digits (strip +254 or leading 0)
+  let phone = rawPhone.replace(/\D/g, "");
+  if (phone.startsWith("254")) phone = phone.slice(3);
+  if (phone.startsWith("0"))   phone = phone.slice(1);
+
+  logger.info({ phone, redirectUrl }, "Launching headless browser for STK push");
+
+  const browser = await puppeteer.launch({
+    executablePath: CHROMIUM_PATH,
+    args: [
+      "--no-sandbox",
+      "--disable-setuid-sandbox",
+      "--disable-dev-shm-usage",
+      "--disable-gpu",
+      "--window-size=480,700",
+    ],
+    headless: true,
+  });
+
+  try {
+    const page = await browser.newPage();
+    await page.setViewport({ width: 480, height: 700 });
+    await page.setUserAgent(
+      "Mozilla/5.0 (Linux; Android 12; Pixel 6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Mobile Safari/537.36"
+    );
+
+    // Load the Pesapal payment page
+    await page.goto(redirectUrl, { waitUntil: "networkidle2", timeout: 30_000 });
+    await new Promise(r => setTimeout(r, 1500));
+
+    // Make sure M-Pesa (pmpesake) radio is selected
+    await page.evaluate(() => {
+      const radio = document.querySelector<HTMLInputElement>('input[value="pmpesake"]');
+      if (radio && !radio.checked) radio.click();
+    });
+    await new Promise(r => setTimeout(r, 500));
+
+    // Fill the phone number field
+    await page.waitForSelector("#PhoneNumber1", { visible: true, timeout: 10_000 });
+    await page.click("#PhoneNumber1", { clickCount: 3 }); // select all existing text
+    await page.type("#PhoneNumber1", phone, { delay: 50 });
+
+    logger.info({ phone }, "Phone number filled, clicking Proceed");
+
+    // Click the Proceed / Submit button
+    await page.waitForSelector("#submitFormBtn", { visible: true, timeout: 5_000 });
+    await page.click("#submitFormBtn");
+
+    // Wait for step-2 div to appear — this means the STK push was sent
+    await page.waitForFunction(
+      () => {
+        const el = document.querySelector("#pmpesake2");
+        return el && !el.classList.contains("hide");
+      },
+      { timeout: 20_000 }
+    );
+
+    logger.info("STK push confirmed sent by Pesapal");
+  } finally {
+    await browser.close();
+  }
 }
 
 // POST /api/payment/initiate — user triggers STK push
@@ -125,7 +190,6 @@ router.post("/initiate", authenticate, async (req: AuthRequest, res: Response): 
     const host = req.headers.host || "localhost";
     const protocol = req.headers["x-forwarded-proto"] || "https";
     const ipnUrl = `${protocol}://${host}/api/payment/ipn`;
-
     const notificationId = await registerIPN(token, ipnUrl, creds.sandbox);
 
     const user = serviceReq.user as any;
@@ -148,7 +212,7 @@ router.post("/initiate", authenticate, async (req: AuthRequest, res: Response): 
       },
     };
 
-    logger.info({ orderPayload }, "Submitting Pesapal order");
+    logger.info({ amount: orderPayload.amount }, "Submitting Pesapal order");
 
     const orderRes = await fetch(`${pesapalBase(creds.sandbox)}/api/Transactions/SubmitOrderRequest`, {
       method: "POST",
@@ -161,22 +225,28 @@ router.post("/initiate", authenticate, async (req: AuthRequest, res: Response): 
     });
 
     const orderData = await orderRes.json();
-    logger.info({ status: orderRes.status, orderData }, "Pesapal order response");
+    logger.info({ status: orderRes.status, order_tracking_id: orderData.order_tracking_id }, "Pesapal order response");
 
     if (!orderRes.ok || orderData.error) {
       throw new Error(orderData.error?.message || orderData.message || "Failed to initiate payment");
     }
 
+    // Save pending status immediately
     await ServiceRequest.findByIdAndUpdate(requestId, {
       paymentStatus: "pending",
       paymentPhone: formattedPhone,
       pesapalOrderTrackingId: orderData.order_tracking_id,
     });
 
+    // Auto-fill Pesapal page and trigger STK push using headless browser
+    // Runs in background — we respond quickly and let polling detect payment
+    triggerSTKPushHeadless(orderData.redirect_url, phone).catch(err => {
+      logger.error({ err: err.message }, "Headless STK push failed");
+    });
+
     res.json({
-      message: "Payment order created. Opening Pesapal to trigger STK push.",
+      message: "Payment prompt is being sent to your phone. Please wait…",
       orderTrackingId: orderData.order_tracking_id,
-      redirectUrl: orderData.redirect_url,
     });
   } catch (err: any) {
     logger.error({ err: err.message }, "Payment initiation error");
