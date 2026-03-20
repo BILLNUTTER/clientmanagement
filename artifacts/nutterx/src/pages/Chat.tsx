@@ -134,7 +134,7 @@ export default function Chat() {
   const getChatSubtitle = (chat: any) => {
     if (chat.type === "group") return `${chat.participants?.length || 0} members`;
     const other = chat.participants?.find((p: any) => p._id !== user?._id);
-    return other?.role === "admin" ? "Support Team" : other?.email || "";
+    return other?.role === "admin" ? "Support Team" : "Platform Member";
   };
 
   const isAdminChat = (chat: any) =>
@@ -299,7 +299,7 @@ export default function Chat() {
                         <div className="flex-1 min-w-0">
                           <div className="font-semibold text-sm truncate">{u.name}</div>
                           <div className="text-xs text-muted-foreground truncate">
-                            {u.role === "admin" ? "Support Team" : u.email}
+                            {u.role === "admin" ? "Support Team" : "Platform Member"}
                           </div>
                         </div>
                         {u.role === "admin" && (

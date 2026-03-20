@@ -534,6 +534,7 @@ function SettingsForm() {
   const [consumerKey, setConsumerKey] = useState("");
   const [consumerSecret, setConsumerSecret] = useState("");
   const [sandbox, setSandbox] = useState(false);
+  const [registrationEnabled, setRegistrationEnabled] = useState(true);
   const [showSecret, setShowSecret] = useState(false);
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
@@ -547,6 +548,7 @@ function SettingsForm() {
         if (data.pesapal_consumer_key) setConsumerKey(data.pesapal_consumer_key);
         if (data.pesapal_consumer_secret) setConsumerSecret(data.pesapal_consumer_secret);
         setSandbox(data.pesapal_sandbox === "true");
+        setRegistrationEnabled(data.registration_enabled !== "false");
       }).catch(() => {}).finally(() => setFetching(false));
   }, []);
 
@@ -557,7 +559,12 @@ function SettingsForm() {
       const res = await fetch("/api/admin/settings", {
         method: "PUT",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ pesapal_consumer_key: consumerKey, pesapal_consumer_secret: consumerSecret, pesapal_sandbox: String(sandbox) }),
+        body: JSON.stringify({
+          pesapal_consumer_key: consumerKey,
+          pesapal_consumer_secret: consumerSecret,
+          pesapal_sandbox: String(sandbox),
+          registration_enabled: String(registrationEnabled),
+        }),
       });
       if (!res.ok) throw new Error("Failed to save");
       setSaved(true);
@@ -591,6 +598,18 @@ function SettingsForm() {
             <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform duration-200 ${sandbox ? "translate-x-5" : "translate-x-0"}`} />
           </button>
         </div>
+        <div className={`flex items-center justify-between p-4 rounded-xl border transition-colors ${registrationEnabled ? "bg-emerald-500/5 border-emerald-500/25" : "bg-red-500/5 border-red-500/25"}`}>
+          <div>
+            <p className="text-sm font-semibold">New Registrations</p>
+            <p className={`text-xs mt-0.5 ${registrationEnabled ? "text-emerald-400" : "text-red-400"}`}>
+              {registrationEnabled ? "Open — anyone can sign up" : "Closed — sign-ups are paused"}
+            </p>
+          </div>
+          <button type="button" onClick={() => setRegistrationEnabled(v => !v)}
+            className={`relative w-11 h-6 rounded-full transition-colors duration-200 focus:outline-none ${registrationEnabled ? "bg-emerald-500" : "bg-red-500/50"}`}>
+            <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform duration-200 ${registrationEnabled ? "translate-x-5" : "translate-x-0"}`} />
+          </button>
+        </div>
         <div>
           <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block mb-1.5">Consumer Key</label>
           <Input value={consumerKey} onChange={e => setConsumerKey(e.target.value)} placeholder="Pesapal Consumer Key" className="h-11 font-mono text-sm" />
@@ -621,208 +640,301 @@ function SettingsForm() {
   );
 }
 
-// ── Phone-Friendly PNG Export ─────────────────────────────────
+// ── Professional Numbered Table PNG Export ────────────────────
 async function exportAsPNG(requests: any[]) {
-  const S = 2;            // 2× scale for retina clarity
-  const LW = 390;         // logical width (phone screen)
-  const W = LW * S;       // physical pixels
-  const HEADER = 130;
-  const STATS_H = 85;
-  const CARD_H = 100;
-  const GAP = 10;
-  const PAD = 18;
-  const FOOTER = 55;
-  const LH = HEADER + PAD + STATS_H + PAD + requests.length * (CARD_H + GAP) + FOOTER;
-  const H = Math.max(LH, 300) * S;
+  const S = 2;
+  const LW = 390;
+  const W = LW * S;
+  const PAD = 16;
+  const HEADER_H = 104;
+  const STATS_H  = 58;
+  const TH_H     = 30;   // table header row
+  const ROW_H    = 28;   // data row height
+  const FOOTER_H = 46;
+
+  const totalH = HEADER_H + STATS_H + TH_H + requests.length * ROW_H + FOOTER_H;
+  const H = Math.max(totalH, 250) * S;
 
   const canvas = document.createElement("canvas");
   canvas.width = W; canvas.height = H;
   const ctx = canvas.getContext("2d")!;
   ctx.scale(S, S);
+  const LH = Math.max(totalH, 250);
 
-  const LH2 = Math.max(LH, 300);
+  // ── Background ──────────────────────────
+  const bg = ctx.createLinearGradient(0, 0, 0, LH);
+  bg.addColorStop(0, "#070e1f");
+  bg.addColorStop(1, "#0c1628");
+  ctx.fillStyle = bg; ctx.fillRect(0, 0, LW, LH);
 
-  // Background
-  const bg = ctx.createLinearGradient(0, 0, 0, LH2);
-  bg.addColorStop(0, "#060d1f");
-  bg.addColorStop(1, "#0a1630");
-  ctx.fillStyle = bg;
-  ctx.fillRect(0, 0, LW, LH2);
+  // ── Top accent bar ──────────────────────
+  const acc = ctx.createLinearGradient(0, 0, LW, 0);
+  acc.addColorStop(0, "#3b82f6");
+  acc.addColorStop(0.5, "#6366f1");
+  acc.addColorStop(1, "#a855f7");
+  ctx.fillStyle = acc; ctx.fillRect(0, 0, LW, 4);
 
-  // Top accent strip
-  const accent = ctx.createLinearGradient(0, 0, LW, 0);
-  accent.addColorStop(0, "#3b82f6");
-  accent.addColorStop(0.5, "#6366f1");
-  accent.addColorStop(1, "#a855f7");
-  ctx.fillStyle = accent;
-  ctx.fillRect(0, 0, LW, 4);
-
-  // Logo circle
-  const lg = ctx.createLinearGradient(PAD, 20, PAD + 44, 64);
-  lg.addColorStop(0, "#3b82f6");
-  lg.addColorStop(1, "#6366f1");
+  // ── Logo ────────────────────────────────
+  const lg = ctx.createLinearGradient(PAD, 16, PAD + 40, 56);
+  lg.addColorStop(0, "#3b82f6"); lg.addColorStop(1, "#6366f1");
   ctx.fillStyle = lg;
-  ctx.beginPath();
-  ctx.roundRect(PAD, 20, 44, 44, 10);
-  ctx.fill();
-  ctx.fillStyle = "#fff";
-  ctx.font = "bold 22px sans-serif";
-  ctx.textAlign = "center";
-  ctx.fillText("N", PAD + 22, 49);
+  ctx.beginPath(); ctx.roundRect(PAD, 16, 40, 40, 9); ctx.fill();
+  ctx.fillStyle = "#fff"; ctx.font = "bold 20px sans-serif"; ctx.textAlign = "center";
+  ctx.fillText("N", PAD + 20, 43);
 
-  // Title
+  // ── Title block ─────────────────────────
   ctx.textAlign = "left";
-  ctx.fillStyle = "#f1f5f9";
-  ctx.font = "bold 17px sans-serif";
-  ctx.fillText("Nutterx Technologies", PAD + 54, 37);
-  ctx.fillStyle = "#64748b";
-  ctx.font = "11px sans-serif";
-  ctx.fillText("Client Services Report", PAD + 54, 53);
-  ctx.fillStyle = "#475569";
-  ctx.font = "10px sans-serif";
-  ctx.fillText(new Date().toLocaleDateString("en-KE", { year: "numeric", month: "long", day: "numeric" }), PAD + 54, 67);
+  ctx.fillStyle = "#f0f4ff"; ctx.font = "bold 15px sans-serif";
+  ctx.fillText("Nutterx Technologies", PAD + 50, 31);
+  ctx.fillStyle = "#64748b"; ctx.font = "10px sans-serif";
+  ctx.fillText("Client Services Report", PAD + 50, 45);
+  ctx.fillStyle = "#334155"; ctx.font = "10px sans-serif";
+  ctx.fillText(new Date().toLocaleDateString("en-KE", { year: "numeric", month: "long", day: "numeric" }), PAD + 50, 58);
 
-  // Divider
-  ctx.strokeStyle = "rgba(255,255,255,0.06)";
-  ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.moveTo(PAD, 82); ctx.lineTo(LW - PAD, 82); ctx.stroke();
+  // Report number / reference
+  ctx.fillStyle = "#1e3a5f"; ctx.font = "9px sans-serif";
+  ctx.textAlign = "right";
+  ctx.fillText(`REF-${Date.now().toString().slice(-8)}`, LW - PAD, 31);
+  ctx.fillText(`${requests.length} records`, LW - PAD, 44);
+  ctx.textAlign = "left";
 
-  // Stats
-  const stats = [
-    { label: "Total",       value: requests.length,                                                  color: "#60a5fa" },
-    { label: "In Progress", value: requests.filter((r: any) => r.status === "in_progress").length,   color: "#818cf8" },
-    { label: "Completed",   value: requests.filter((r: any) => r.status === "completed").length,     color: "#34d399" },
-    { label: "Paid",        value: requests.filter((r: any) => r.paymentStatus === "paid").length,   color: "#a78bfa" },
+  // ── Divider ─────────────────────────────
+  const divY = HEADER_H - 14;
+  ctx.strokeStyle = "rgba(255,255,255,0.07)"; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(PAD, divY); ctx.lineTo(LW - PAD, divY); ctx.stroke();
+
+  // ── Stats row ───────────────────────────
+  const statsData = [
+    { label: "Total",       value: requests.length,                                                color: "#60a5fa" },
+    { label: "In Progress", value: requests.filter((r: any) => r.status === "in_progress").length, color: "#818cf8" },
+    { label: "Completed",   value: requests.filter((r: any) => r.status === "completed").length,   color: "#34d399" },
+    { label: "Paid",        value: requests.filter((r: any) => r.paymentStatus === "paid").length, color: "#a78bfa" },
   ];
-  const SW = (LW - PAD * 2 - 12) / 4;
-  stats.forEach((st, i) => {
-    const x = PAD + i * (SW + 4);
-    ctx.fillStyle = "rgba(255,255,255,0.04)";
-    ctx.beginPath(); ctx.roundRect(x, 90, SW, 62, 8); ctx.fill();
-    ctx.fillStyle = st.color;
-    ctx.font = "bold 22px sans-serif";
-    ctx.textAlign = "center";
-    ctx.fillText(String(st.value), x + SW / 2, 120);
-    ctx.fillStyle = "#64748b";
-    ctx.font = "9px sans-serif";
-    ctx.fillText(st.label, x + SW / 2, 136);
+  const SW = (LW - PAD * 2 - 9) / 4;
+  const SY = HEADER_H - 10;
+  statsData.forEach((st, i) => {
+    const sx = PAD + i * (SW + 3);
+    ctx.fillStyle = "rgba(255,255,255,0.035)";
+    ctx.beginPath(); ctx.roundRect(sx, SY, SW, 44, 6); ctx.fill();
+    ctx.strokeStyle = "rgba(255,255,255,0.06)"; ctx.lineWidth = 0.5;
+    ctx.beginPath(); ctx.roundRect(sx, SY, SW, 44, 6); ctx.stroke();
+    ctx.fillStyle = st.color; ctx.font = "bold 18px sans-serif"; ctx.textAlign = "center";
+    ctx.fillText(String(st.value), sx + SW / 2, SY + 22);
+    ctx.fillStyle = "#475569"; ctx.font = "8.5px sans-serif";
+    ctx.fillText(st.label, sx + SW / 2, SY + 35);
   });
   ctx.textAlign = "left";
 
-  // Client cards
-  const statusMeta: Record<string, { label: string; color: string; accent: string }> = {
-    completed:   { label: "Completed",   color: "#34d399", accent: "#10b981" },
-    in_progress: { label: "In Progress", color: "#60a5fa", accent: "#3b82f6" },
-    pending:     { label: "Pending",     color: "#fbbf24", accent: "#f59e0b" },
-    cancelled:   { label: "Cancelled",   color: "#f87171", accent: "#ef4444" },
+  // ── Table columns definition ─────────────────────────────────
+  const tableTop = HEADER_H + STATS_H;
+  const CW = LW - PAD * 2; // 358
+  const cols = [
+    { label: "#",        x: PAD,             w: 22,  align: "center" as const },
+    { label: "Name",     x: PAD + 22,        w: 102, align: "left"   as const },
+    { label: "Service",  x: PAD + 124,       w: 96,  align: "left"   as const },
+    { label: "Status",   x: PAD + 220,       w: 68,  align: "left"   as const },
+    { label: "KES",      x: PAD + 288,       w: 70,  align: "right"  as const },
+  ];
+
+  // ── Table header row ─────────────────────────────────────────
+  const thGrad = ctx.createLinearGradient(0, tableTop, LW, tableTop);
+  thGrad.addColorStop(0, "rgba(59,130,246,0.18)");
+  thGrad.addColorStop(1, "rgba(99,102,241,0.10)");
+  ctx.fillStyle = thGrad;
+  ctx.beginPath(); ctx.roundRect(PAD, tableTop, CW, TH_H, [6, 6, 0, 0]); ctx.fill();
+
+  ctx.fillStyle = "#7dd3fc"; ctx.font = "bold 9.5px sans-serif";
+  cols.forEach(col => {
+    const tx = col.align === "right" ? col.x + col.w : col.align === "center" ? col.x + col.w / 2 : col.x + 4;
+    ctx.textAlign = col.align;
+    ctx.fillText(col.label, tx, tableTop + 19);
+  });
+  ctx.textAlign = "left";
+
+  // ── Data rows ────────────────────────────────────────────────
+  const statusColor: Record<string, string> = {
+    completed:   "#34d399",
+    in_progress: "#60a5fa",
+    pending:     "#fbbf24",
+    cancelled:   "#f87171",
+  };
+  const statusLabel: Record<string, string> = {
+    completed:   "Done",
+    in_progress: "Active",
+    pending:     "Pending",
+    cancelled:   "Cancelled",
   };
 
-  const cardsY = HEADER + PAD + STATS_H + PAD;
+  const truncate = (s: string, n: number) => !s ? "—" : s.length > n ? s.slice(0, n) + "…" : s;
+
   requests.forEach((req: any, i: number) => {
-    const y = cardsY + i * (CARD_H + GAP);
-    const meta = statusMeta[req.status] || { label: req.status, color: "#94a3b8", accent: "#64748b" };
+    const rowY = tableTop + TH_H + i * ROW_H;
+    const isEven = i % 2 === 0;
     const user = req.user as any;
 
-    // Card background
-    ctx.fillStyle = "rgba(255,255,255,0.038)";
-    ctx.beginPath(); ctx.roundRect(PAD, y, LW - PAD * 2, CARD_H, 12); ctx.fill();
+    // Row background
+    ctx.fillStyle = isEven ? "rgba(255,255,255,0.028)" : "rgba(0,0,0,0.12)";
+    ctx.fillRect(PAD, rowY, CW, ROW_H);
 
-    // Status accent bar (left edge)
-    ctx.fillStyle = meta.accent;
-    ctx.beginPath(); ctx.roundRect(PAD, y, 4, CARD_H, [12, 0, 0, 12]); ctx.fill();
+    // Row bottom border
+    ctx.strokeStyle = "rgba(255,255,255,0.04)"; ctx.lineWidth = 0.5;
+    ctx.beginPath(); ctx.moveTo(PAD, rowY + ROW_H); ctx.lineTo(PAD + CW, rowY + ROW_H); ctx.stroke();
 
-    // Avatar
-    const avatarGrad = ctx.createLinearGradient(PAD + 16, y + 20, PAD + 48, y + 52);
-    avatarGrad.addColorStop(0, "#4f46e5");
-    avatarGrad.addColorStop(1, "#7c3aed");
-    ctx.fillStyle = avatarGrad;
-    ctx.beginPath(); ctx.arc(PAD + 32, y + 36, 18, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = "#fff";
-    ctx.font = "bold 13px sans-serif";
-    ctx.textAlign = "center";
-    const initials = user?.name ? user.name.split(" ").map((w: string) => w[0]).join("").toUpperCase().slice(0, 2) : "?";
-    ctx.fillText(initials, PAD + 32, y + 41);
-    ctx.textAlign = "left";
+    const midY = rowY + ROW_H * 0.62;
 
-    const tx = PAD + 58;
+    // # (row number)
+    ctx.fillStyle = "#3b82f6"; ctx.font = "bold 9px sans-serif"; ctx.textAlign = "center";
+    ctx.fillText(String(i + 1), PAD + 11, midY);
+
     // Name
-    ctx.fillStyle = "#f1f5f9";
-    ctx.font = "bold 13px sans-serif";
-    const truncate = (s: string, n: number) => s?.length > n ? s.slice(0, n) + "…" : s;
-    ctx.fillText(truncate(user?.name || "—", 22), tx, y + 22);
+    ctx.fillStyle = "#e2e8f0"; ctx.font = "bold 9.5px sans-serif"; ctx.textAlign = "left";
+    ctx.fillText(truncate(user?.name || "—", 14), PAD + 26, midY);
 
-    // Email
-    ctx.fillStyle = "#64748b";
-    ctx.font = "10px sans-serif";
-    ctx.fillText(truncate(user?.email || "", 30), tx, y + 36);
+    // Service
+    ctx.fillStyle = "#94a3b8"; ctx.font = "9px sans-serif";
+    ctx.fillText(truncate(req.serviceName, 14), PAD + 128, midY);
 
-    // Service name
-    ctx.fillStyle = "#818cf8";
-    ctx.font = "10px sans-serif";
-    ctx.fillText(truncate(req.serviceName, 28), tx, y + 50);
+    // Status (colored)
+    const sc = statusColor[req.status] || "#94a3b8";
+    ctx.fillStyle = sc; ctx.font = "bold 9px sans-serif";
+    ctx.fillText(statusLabel[req.status] || req.status || "—", PAD + 224, midY);
 
-    // Status pill
-    const pX = LW - PAD - 80;
-    ctx.fillStyle = meta.color + "22";
-    ctx.beginPath(); ctx.roundRect(pX, y + 12, 70, 22, 11); ctx.fill();
-    ctx.strokeStyle = meta.color + "55";
-    ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.roundRect(pX, y + 12, 70, 22, 11); ctx.stroke();
-    ctx.fillStyle = meta.color;
-    ctx.font = "bold 9px sans-serif";
-    ctx.textAlign = "center";
-    ctx.fillText(meta.label, pX + 35, y + 27);
-    ctx.textAlign = "left";
-
-    // Payment info
+    // KES amount
+    ctx.textAlign = "right";
     if (req.paymentRequired) {
-      const pColor = req.paymentStatus === "paid" ? "#34d399" : "#fbbf24";
-      ctx.fillStyle = pColor;
-      ctx.font = "10px sans-serif";
-      ctx.fillText(req.paymentStatus === "paid" ? `✓ Paid KES ${(req.paymentAmount || 0).toLocaleString()}` : `⏳ KES ${(req.paymentAmount || 0).toLocaleString()}`, pX, y + 52);
+      const paid = req.paymentStatus === "paid";
+      ctx.fillStyle = paid ? "#34d399" : "#fbbf24";
+      ctx.font = paid ? "bold 9px sans-serif" : "9px sans-serif";
+      ctx.fillText(paid ? `✓ ${(req.paymentAmount || 0).toLocaleString()}` : `${(req.paymentAmount || 0).toLocaleString()}`, PAD + 358, midY);
+    } else {
+      ctx.fillStyle = "#334155"; ctx.font = "9px sans-serif";
+      ctx.fillText("—", PAD + 358, midY);
     }
-
-    // Deadline
-    if (req.subscriptionEndsAt) {
-      ctx.fillStyle = "#475569";
-      ctx.font = "9px sans-serif";
-      ctx.fillText(`Deadline: ${new Date(req.subscriptionEndsAt).toLocaleDateString("en-KE")}`, pX, y + 68);
-    }
-
-    // Card bottom border
-    ctx.strokeStyle = "rgba(255,255,255,0.04)";
-    ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(PAD + 12, y + CARD_H); ctx.lineTo(LW - PAD - 12, y + CARD_H); ctx.stroke();
+    ctx.textAlign = "left";
   });
 
-  // Footer
-  const FY = cardsY + requests.length * (CARD_H + GAP) + 8;
-  ctx.fillStyle = "rgba(255,255,255,0.03)";
-  ctx.fillRect(0, FY, LW, FOOTER);
-  ctx.strokeStyle = "rgba(255,255,255,0.06)";
-  ctx.lineWidth = 1;
+  // Table outer border
+  ctx.strokeStyle = "rgba(255,255,255,0.08)"; ctx.lineWidth = 1;
+  const tableH = TH_H + requests.length * ROW_H;
+  ctx.beginPath(); ctx.roundRect(PAD, tableTop, CW, tableH, [6, 6, 0, 0]); ctx.stroke();
+
+  // Column dividers in header only
+  ctx.strokeStyle = "rgba(255,255,255,0.05)"; ctx.lineWidth = 0.5;
+  [PAD + 22, PAD + 124, PAD + 220, PAD + 288].forEach(cx => {
+    ctx.beginPath(); ctx.moveTo(cx, tableTop); ctx.lineTo(cx, tableTop + tableH); ctx.stroke();
+  });
+
+  // ── Footer ───────────────────────────────────────────────────
+  const FY = tableTop + tableH;
+  ctx.fillStyle = "rgba(255,255,255,0.02)";
+  ctx.fillRect(0, FY, LW, FOOTER_H);
+  ctx.strokeStyle = "rgba(255,255,255,0.06)"; ctx.lineWidth = 1;
   ctx.beginPath(); ctx.moveTo(0, FY); ctx.lineTo(LW, FY); ctx.stroke();
-  ctx.fillStyle = "#334155";
-  ctx.font = "9px sans-serif";
-  ctx.textAlign = "center";
-  ctx.fillText("Generated by Nutterx Technologies · Confidential", LW / 2, FY + 20);
-  ctx.fillStyle = "#1e3a5f";
-  ctx.fillText(`nutterx.tech · ${new Date().getFullYear()}`, LW / 2, FY + 34);
+
+  ctx.fillStyle = "#1e3a5f"; ctx.font = "9px sans-serif"; ctx.textAlign = "center";
+  ctx.fillText("Generated by Nutterx Technologies  ·  Confidential", LW / 2, FY + 18);
+  ctx.fillStyle = "#0f2540"; ctx.font = "8px sans-serif";
+  ctx.fillText(`nutterx.tech  ·  ${new Date().getFullYear()}  ·  KES = Kenya Shillings`, LW / 2, FY + 33);
 
   canvas.toBlob(blob => {
     if (!blob) return;
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
-    a.href = url; a.download = `nutterx-clients-${Date.now()}.png`;
+    a.href = url; a.download = `nutterx-report-${Date.now()}.png`;
     document.body.appendChild(a); a.click();
     document.body.removeChild(a); URL.revokeObjectURL(url);
   }, "image/png");
+}
+
+// ── Create Group Chat Modal ───────────────────────────────────
+function CreateGroupModal({ users, onClose, token }: { users: any[]; onClose: () => void; token: string }) {
+  const [groupName, setGroupName] = useState("");
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [done, setDone] = useState(false);
+
+  const toggle = (id: string) =>
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+
+  const handleCreate = async () => {
+    if (!groupName.trim()) { setError("Please enter a group name."); return; }
+    if (!selectedIds.length) { setError("Select at least one member."); return; }
+    setError(""); setLoading(true);
+    try {
+      const res = await fetch("/api/chats/group", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ name: groupName.trim(), participantIds: selectedIds }),
+      });
+      if (!res.ok) { const d = await res.json(); throw new Error(d.message || "Failed"); }
+      setDone(true);
+      setTimeout(onClose, 1400);
+    } catch (e: any) { setError(e.message); }
+    finally { setLoading(false); }
+  };
+
+  const nonAdminUsers = users.filter((u: any) => u.role !== "admin");
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+      <motion.div initial={{ opacity: 0, y: 40, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 20 }}
+        className="w-full max-w-sm bg-card border border-border rounded-3xl p-6 shadow-2xl">
+        <div className="flex items-center justify-between mb-5">
+          <h3 className="text-base font-bold">New Group Chat</h3>
+          <button onClick={onClose} className="w-8 h-8 rounded-xl bg-secondary flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="mb-4">
+          <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">Group Name</label>
+          <Input value={groupName} onChange={e => setGroupName(e.target.value)} placeholder="e.g. Project Alpha Team" className="h-10" />
+        </div>
+
+        <div className="mb-4">
+          <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-2">
+            Members <span className="text-primary">({selectedIds.length} selected)</span>
+          </label>
+          <div className="max-h-52 overflow-y-auto space-y-1.5 pr-1">
+            {nonAdminUsers.length === 0 && <p className="text-muted-foreground text-xs py-3 text-center">No users available.</p>}
+            {nonAdminUsers.map((u: any) => {
+              const checked = selectedIds.includes(u._id);
+              return (
+                <button key={u._id} type="button" onClick={() => toggle(u._id)}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border text-left transition-colors ${checked ? "bg-primary/10 border-primary/30" : "bg-secondary/30 border-border hover:bg-secondary/50"}`}>
+                  <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 transition-colors ${checked ? "bg-primary border-primary" : "border-muted-foreground/40"}`}>
+                    {checked && <CheckCircle2 className="w-3 h-3 text-white" />}
+                  </div>
+                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500/30 to-purple-600/30 flex items-center justify-center font-bold text-xs text-indigo-300 shrink-0">
+                    {u.name?.charAt(0).toUpperCase()}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm font-semibold truncate">{u.name}</div>
+                    <div className="text-xs text-muted-foreground">Member</div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {error && <p className="text-sm text-red-400 mb-3 flex items-center gap-1.5"><AlertCircle className="w-4 h-4 shrink-0" />{error}</p>}
+        {done && <p className="text-sm text-emerald-400 mb-3 flex items-center gap-1.5"><CheckCircle2 className="w-4 h-4 shrink-0" />Group created! Members can now chat.</p>}
+
+        <Button onClick={handleCreate} variant="gradient" className="w-full h-10" disabled={loading || done}>
+          {loading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Creating...</> : "Create Group Chat"}
+        </Button>
+      </motion.div>
+    </div>
+  );
 }
 
 // ── Main Admin Component ──────────────────────────────────────
 export default function Admin() {
   const { user, login } = useAuth();
   const [activeTab, setActiveTab] = useState<Tab>("requests");
+  const [showGroupModal, setShowGroupModal] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [editingRequest, setEditingRequest] = useState<any>(null);
@@ -967,10 +1079,26 @@ export default function Admin() {
             {/* USERS */}
             {activeTab === "users" && (
               <motion.div key="users" variants={pageVariants} initial="initial" animate="animate" exit="exit" transition={{ duration: 0.2 }}>
-                <div className="flex items-center justify-between mb-5">
-                  <h2 className="text-lg font-bold">Registered Users</h2>
-                  <span className="text-sm text-muted-foreground">{users?.length || 0} users</span>
+                <div className="flex items-center justify-between mb-5 gap-3 flex-wrap">
+                  <div>
+                    <h2 className="text-lg font-bold">Registered Users</h2>
+                    <span className="text-sm text-muted-foreground">{users?.length || 0} members</span>
+                  </div>
+                  <button
+                    onClick={() => setShowGroupModal(true)}
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-500/10 border border-indigo-500/25 text-indigo-400 text-sm font-semibold hover:bg-indigo-500/20 transition-colors"
+                  >
+                    <Plus className="w-4 h-4" />
+                    New Group Chat
+                  </button>
                 </div>
+                {showGroupModal && (
+                  <CreateGroupModal
+                    users={users || []}
+                    onClose={() => setShowGroupModal(false)}
+                    token={localStorage.getItem("nutterx_token") || ""}
+                  />
+                )}
                 {usersLoading ? (
                   <div className="flex justify-center py-16"><Loader2 className="w-7 h-7 animate-spin text-primary" /></div>
                 ) : (

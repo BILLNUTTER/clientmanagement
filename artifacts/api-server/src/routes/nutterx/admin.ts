@@ -251,33 +251,33 @@ router.get("/payments", authenticate, requireAdmin, async (_req: AuthRequest, re
   }
 });
 
-// Get admin settings (Pesapal keys)
+// Get admin settings
 router.get("/settings", authenticate, requireAdmin, async (_req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const keys = ["pesapal_consumer_key", "pesapal_consumer_secret", "pesapal_sandbox"];
+    const keys = ["pesapal_consumer_key", "pesapal_consumer_secret", "pesapal_sandbox", "registration_enabled"];
     const docs = await Settings.find({ key: { $in: keys } });
     const result: Record<string, string> = {};
     for (const doc of docs) result[doc.key] = doc.value;
+    if (result["registration_enabled"] === undefined) result["registration_enabled"] = "true";
     res.json(result);
   } catch {
     res.status(500).json({ message: "Failed to fetch settings" });
   }
 });
 
-// Save admin settings (Pesapal keys)
+// Save admin settings
 router.put("/settings", authenticate, requireAdmin, async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { pesapal_consumer_key, pesapal_consumer_secret, pesapal_sandbox } = req.body;
+    const { pesapal_consumer_key, pesapal_consumer_secret, pesapal_sandbox, registration_enabled } = req.body;
     const ops = [];
-    if (pesapal_consumer_key !== undefined) {
+    if (pesapal_consumer_key !== undefined)
       ops.push(Settings.findOneAndUpdate({ key: "pesapal_consumer_key" }, { value: pesapal_consumer_key }, { upsert: true, new: true }));
-    }
-    if (pesapal_consumer_secret !== undefined) {
+    if (pesapal_consumer_secret !== undefined)
       ops.push(Settings.findOneAndUpdate({ key: "pesapal_consumer_secret" }, { value: pesapal_consumer_secret }, { upsert: true, new: true }));
-    }
-    if (pesapal_sandbox !== undefined) {
+    if (pesapal_sandbox !== undefined)
       ops.push(Settings.findOneAndUpdate({ key: "pesapal_sandbox" }, { value: String(pesapal_sandbox) }, { upsert: true, new: true }));
-    }
+    if (registration_enabled !== undefined)
+      ops.push(Settings.findOneAndUpdate({ key: "registration_enabled" }, { value: String(registration_enabled) }, { upsert: true, new: true }));
     await Promise.all(ops);
     res.json({ message: "Settings saved" });
   } catch {

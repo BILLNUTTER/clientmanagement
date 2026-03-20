@@ -1,11 +1,18 @@
 import { Router, Request, Response } from "express";
 import { User } from "../../models/User";
+import { Settings } from "../../models/Settings";
 import { generateToken, authenticate, AuthRequest } from "../../middlewares/auth";
 
 const router = Router();
 
 router.post("/register", async (req: Request, res: Response): Promise<void> => {
   try {
+    const regSetting = await Settings.findOne({ key: "registration_enabled" });
+    if (regSetting && regSetting.value === "false") {
+      res.status(403).json({ message: "New registrations are currently disabled. Please contact the admin." });
+      return;
+    }
+
     const { name, email, password } = req.body;
 
     if (!name || !email || !password) {

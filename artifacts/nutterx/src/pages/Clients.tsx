@@ -121,8 +121,8 @@ export default function Clients() {
                               {initials}
                             </div>
                             <div className="min-w-0">
-                              <div className="font-semibold truncate max-w-[120px]">{client.user?.name || "Client"}</div>
-                              <div className="text-xs text-muted-foreground truncate max-w-[120px]">{client.user?.email || ""}</div>
+                              <div className="font-semibold truncate max-w-[140px]">{client.user?.name || "Client"}</div>
+                              <div className="text-xs text-muted-foreground">Platform Member</div>
                             </div>
                           </div>
                         </td>
