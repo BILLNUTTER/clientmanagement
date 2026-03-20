@@ -160,7 +160,7 @@ export default function Home() {
                   <div className="mt-4 pt-4 border-t border-border flex items-center justify-between">
                     <div>
                       <span className="text-xs text-muted-foreground">Starting at</span>
-                      <div className="text-xl font-bold">${service.price}</div>
+                      <div className="text-xl font-bold">{service.price ? `KES ${service.price.toLocaleString()}` : "Custom"}</div>
                     </div>
                     <Link href="/auth">
                       <Button size="sm" variant="outline" className="text-xs gap-1.5 group-hover:bg-primary group-hover:text-primary-foreground group-hover:border-primary transition-all">

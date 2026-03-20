@@ -2,22 +2,29 @@ import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { useTheme } from "@/hooks/use-theme";
+import { useGetChats } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { LayoutDashboard, MessageSquare, LogOut, Sun, Moon, Users, Menu, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
-
-const NAV_LINKS = [
-  { href: "/clients", label: "Clients", icon: Users },
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/chat", label: "Chat", icon: MessageSquare },
-];
 
 export function Navbar() {
   const { user, isAuthenticated, logout } = useAuth();
   const { theme, toggle } = useTheme();
   const [location] = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
+
+  const { data: chats } = useGetChats({ query: { enabled: isAuthenticated } });
+  const totalUnread = chats
+    ? chats.reduce((sum: number, c: any) => sum + (c.unreadCount || 0), 0)
+    : 0;
+  const showBadge = totalUnread > 0 && location !== "/chat";
+
+  const NAV_LINKS = [
+    { href: "/clients",   label: "Clients",   icon: Users },
+    { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+    { href: "/chat",      label: "Chat",      icon: MessageSquare, badge: showBadge ? totalUnread : 0 },
+  ];
 
   return (
     <>
@@ -45,21 +52,25 @@ export function Navbar() {
               {isAuthenticated && NAV_LINKS.map(link => (
                 <Link key={link.href} href={link.href}>
                   <button className={cn(
-                    "flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-medium transition-all",
+                    "relative flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-medium transition-all",
                     location === link.href
                       ? "bg-primary/10 text-primary"
                       : "text-muted-foreground hover:text-foreground hover:bg-secondary/60"
                   )}>
                     <link.icon className="w-4 h-4" />
                     {link.label}
+                    {(link as any).badge > 0 && (
+                      <span className="absolute -top-1 -right-1 w-4.5 h-4.5 min-w-[1.1rem] px-1 bg-red-500 rounded-full text-[10px] font-bold text-white flex items-center justify-center leading-none">
+                        {(link as any).badge > 9 ? "9+" : (link as any).badge}
+                      </span>
+                    )}
                   </button>
                 </Link>
               ))}
             </div>
 
-            {/* Right side actions */}
+            {/* Right side */}
             <div className="flex items-center gap-2">
-              {/* Theme toggle */}
               <motion.button
                 whileHover={{ scale: 1.08 }}
                 whileTap={{ scale: 0.92 }}
@@ -84,12 +95,16 @@ export function Navbar() {
                     <LogOut className="w-4 h-4" />
                     Logout
                   </button>
-                  {/* Mobile hamburger */}
                   <button
                     onClick={() => setMobileOpen(!mobileOpen)}
-                    className="md:hidden w-9 h-9 rounded-xl flex items-center justify-center border border-border hover:bg-secondary/60 transition-all"
+                    className="md:hidden w-9 h-9 rounded-xl flex items-center justify-center border border-border hover:bg-secondary/60 transition-all relative"
                   >
                     {mobileOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
+                    {showBadge && !mobileOpen && (
+                      <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full text-[9px] font-bold text-white flex items-center justify-center">
+                        {totalUnread > 9 ? "9+" : totalUnread}
+                      </span>
+                    )}
                   </button>
                 </>
               ) : (
@@ -111,21 +126,17 @@ export function Navbar() {
         </div>
       </motion.nav>
 
-      {/* Mobile slide-down drawer */}
+      {/* Mobile drawer */}
       <AnimatePresence>
         {mobileOpen && isAuthenticated && (
           <>
             <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               onClick={() => setMobileOpen(false)}
               className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm md:hidden"
             />
             <motion.div
-              initial={{ y: -8, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              exit={{ y: -8, opacity: 0 }}
+              initial={{ y: -8, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -8, opacity: 0 }}
               transition={{ duration: 0.2 }}
               className="fixed top-16 left-0 right-0 z-40 md:hidden border-b border-border bg-background/95 backdrop-blur-xl shadow-2xl"
             >
@@ -133,13 +144,18 @@ export function Navbar() {
                 {NAV_LINKS.map(link => (
                   <Link key={link.href} href={link.href} onClick={() => setMobileOpen(false)}>
                     <button className={cn(
-                      "w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all text-left",
+                      "w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all text-left relative",
                       location === link.href
                         ? "bg-primary/10 text-primary"
                         : "text-muted-foreground hover:text-foreground hover:bg-secondary/60"
                     )}>
                       <link.icon className="w-4 h-4" />
                       {link.label}
+                      {(link as any).badge > 0 && (
+                        <span className="ml-auto px-2 py-0.5 bg-red-500 rounded-full text-[10px] font-bold text-white">
+                          {(link as any).badge > 9 ? "9+" : (link as any).badge}
+                        </span>
+                      )}
                     </button>
                   </Link>
                 ))}

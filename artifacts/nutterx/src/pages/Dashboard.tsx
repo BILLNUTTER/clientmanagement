@@ -435,7 +435,7 @@ export default function Dashboard() {
                     ))}
                     <div className="flex items-center justify-between mt-3 pt-3 border-t border-border">
                       <span className="font-bold text-sm">
-                        {service.price ? `$${service.price}` : "Custom"}
+                        {service.price ? `KES ${service.price.toLocaleString()}` : "Custom"}
                         <span className="text-xs font-normal text-muted-foreground"> /project</span>
                       </span>
                       <span className={cn("text-xs font-semibold flex items-center gap-1 group-hover:text-primary transition-colors", colors.text)}>

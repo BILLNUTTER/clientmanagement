@@ -164,8 +164,8 @@ export default function Chat() {
   const activeChatOtherId = activeChat ? getChatOtherId(activeChat) : null;
 
   return (
-    <div className="pt-20 h-screen flex flex-col">
-      <div className="flex-1 relative overflow-hidden">
+    <div className="h-dvh flex flex-col pt-16">
+      <div className="flex-1 relative overflow-hidden min-h-0">
 
         {/* LIST SCREEN */}
         <AnimatePresence>
@@ -175,7 +175,7 @@ export default function Chat() {
               initial={{ x: 0, opacity: 1 }}
               exit={{ x: "-100%", opacity: 0 }}
               transition={{ duration: 0.28, ease: "easeInOut" }}
-              className="absolute inset-0 flex flex-col bg-background overflow-y-auto"
+              className="absolute inset-0 flex flex-col bg-background"
             >
               {/* Header */}
               <div className="px-4 pt-4 pb-3 border-b border-border bg-card/60 backdrop-blur-md shrink-0">

@@ -212,6 +212,45 @@ router.get("/export", authenticate, requireAdmin, async (_req: AuthRequest, res:
   }
 });
 
+// Delete a user
+router.delete("/users/:id", authenticate, requireAdmin, async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const user = await User.findById(req.params["id"]);
+    if (!user) { res.status(404).json({ message: "User not found" }); return; }
+    if (user.role === "admin") { res.status(403).json({ message: "Cannot delete admin account" }); return; }
+    await User.findByIdAndDelete(req.params["id"]);
+    await ServiceRequest.deleteMany({ user: req.params["id"] });
+    res.json({ message: "User deleted" });
+  } catch {
+    res.status(500).json({ message: "Failed to delete user" });
+  }
+});
+
+// Payment statements (all requests with payment info)
+router.get("/payments", authenticate, requireAdmin, async (_req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const requests = await ServiceRequest.find({ paymentRequired: true })
+      .populate("user", "name email")
+      .sort({ createdAt: -1 });
+    const statements = requests.map((r) => ({
+      _id: r._id,
+      user: r.user,
+      serviceName: r.serviceName,
+      paymentAmount: r.paymentAmount,
+      paymentCurrency: r.paymentCurrency || "KES",
+      paymentStatus: r.paymentStatus,
+      paymentRequired: r.paymentRequired,
+      pesapalOrderTrackingId: r.pesapalOrderTrackingId,
+      createdAt: r.createdAt,
+    }));
+    const totalRevenue = statements.filter(s => s.paymentStatus === "paid").reduce((sum, s) => sum + (s.paymentAmount || 0), 0);
+    const pendingAmount = statements.filter(s => s.paymentStatus === "unpaid" || s.paymentStatus === "pending").reduce((sum, s) => sum + (s.paymentAmount || 0), 0);
+    res.json({ statements, totalRevenue, pendingAmount });
+  } catch {
+    res.status(500).json({ message: "Failed to fetch payment statements" });
+  }
+});
+
 // Get admin settings (Pesapal keys)
 router.get("/settings", authenticate, requireAdmin, async (_req: AuthRequest, res: Response): Promise<void> => {
   try {
