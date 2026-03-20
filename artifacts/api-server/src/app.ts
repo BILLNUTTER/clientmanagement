@@ -1,6 +1,8 @@
 import express, { type Express } from "express";
 import cors from "cors";
 import pinoHttp from "pino-http";
+import path from "path";
+import fs from "fs";
 import router from "./routes";
 import { logger } from "./lib/logger";
 
@@ -29,6 +31,30 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+app.get("/api/health", (_req, res) => {
+  res.json({ status: "ok", timestamp: new Date().toISOString() });
+});
+
 app.use("/api", router);
+
+if (process.env.NODE_ENV === "production") {
+  const frontendDist = path.resolve(
+    process.cwd(),
+    "artifacts/nutterx/dist/public",
+  );
+
+  if (fs.existsSync(frontendDist)) {
+    app.use(express.static(frontendDist));
+    app.get(/.*/, (_req, res) => {
+      res.sendFile(path.join(frontendDist, "index.html"));
+    });
+    logger.info({ frontendDist }, "Serving frontend static files");
+  } else {
+    logger.warn(
+      { frontendDist },
+      "Frontend dist not found — run the build first",
+    );
+  }
+}
 
 export default app;
