@@ -2,6 +2,7 @@ import { Router, Request, Response } from "express";
 import { User } from "../../models/User";
 import { ServiceRequest } from "../../models/ServiceRequest";
 import { Chat } from "../../models/Chat";
+import { Settings } from "../../models/Settings";
 import { authenticate, requireAdmin, generateToken, AuthRequest } from "../../middlewares/auth";
 import { formatRequest } from "./requests";
 
@@ -72,14 +73,16 @@ router.get("/requests", authenticate, requireAdmin, async (_req: AuthRequest, re
   }
 });
 
-// Update service request (status + deadline)
+// Update service request (status + deadline + payment)
 router.put("/requests/:id", authenticate, requireAdmin, async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { status, adminNotes, subscriptionEndsAt } = req.body;
+    const { status, adminNotes, subscriptionEndsAt, paymentRequired, paymentAmount } = req.body;
 
     const update: Record<string, unknown> = {};
     if (status !== undefined) update["status"] = status;
     if (adminNotes !== undefined) update["adminNotes"] = adminNotes;
+    if (paymentRequired !== undefined) update["paymentRequired"] = paymentRequired;
+    if (paymentAmount !== undefined) update["paymentAmount"] = Number(paymentAmount);
 
     if (subscriptionEndsAt) {
       update["subscriptionEndsAt"] = new Date(subscriptionEndsAt);
@@ -206,6 +209,37 @@ router.get("/export", authenticate, requireAdmin, async (_req: AuthRequest, res:
     res.send(csv);
   } catch {
     res.status(500).json({ message: "Export failed" });
+  }
+});
+
+// Get admin settings (Pesapal keys)
+router.get("/settings", authenticate, requireAdmin, async (_req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const keys = ["pesapal_consumer_key", "pesapal_consumer_secret"];
+    const docs = await Settings.find({ key: { $in: keys } });
+    const result: Record<string, string> = {};
+    for (const doc of docs) result[doc.key] = doc.value;
+    res.json(result);
+  } catch {
+    res.status(500).json({ message: "Failed to fetch settings" });
+  }
+});
+
+// Save admin settings (Pesapal keys)
+router.put("/settings", authenticate, requireAdmin, async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { pesapal_consumer_key, pesapal_consumer_secret } = req.body;
+    const ops = [];
+    if (pesapal_consumer_key !== undefined) {
+      ops.push(Settings.findOneAndUpdate({ key: "pesapal_consumer_key" }, { value: pesapal_consumer_key }, { upsert: true }));
+    }
+    if (pesapal_consumer_secret !== undefined) {
+      ops.push(Settings.findOneAndUpdate({ key: "pesapal_consumer_secret" }, { value: pesapal_consumer_secret }, { upsert: true }));
+    }
+    await Promise.all(ops);
+    res.json({ message: "Settings saved" });
+  } catch {
+    res.status(500).json({ message: "Failed to save settings" });
   }
 });
 
