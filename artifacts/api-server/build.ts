@@ -36,6 +36,9 @@ const allowlist = [
   "ws",
   "xlsx",
   "zod",
+  "mongoose",
+  "bcryptjs",
+  "socket.io",
   "zod-validation-error",
 ];
 

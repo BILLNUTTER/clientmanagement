@@ -1,0 +1,22 @@
+packages:
+  "framer-motion": "For stunning page transitions, micro-interactions, and hero animations"
+  "socket.io-client": "Real-time chat functionality and presence"
+  "date-fns": "For elegant date formatting and countdown timers"
+  "zustand": "Lightweight global state management for auth and socket"
+  "react-hook-form": "Form state management"
+  "@hookform/resolvers": "Zod integration for forms"
+  "clsx": "Utility for constructing className strings conditionally"
+  "tailwind-merge": "Utility for merging tailwind classes without conflicts"
+
+images:
+  - path: "artifacts/nutterx/public/images/hero-bg.png"
+    description: "Dark deep navy background with glowing electric blue abstract geometric shapes, glassmorphism elements, tech startup vibe, highly polished"
+    aspect_ratio: "16:9"
+  - path: "artifacts/nutterx/public/images/logo.png"
+    description: "Letter N logo mark, modern minimalist tech company, glowing bright blue on transparent background"
+    aspect_ratio: "1:1"
+
+notes:
+  - Expecting standard JWT auth in localStorage as 'nutterx_token'
+  - We will intercept global fetch to ensure 'Bearer <token>' is sent to all /api requests, as we don't control the generated customFetch
+  - Socket.io will connect to window.location.origin
