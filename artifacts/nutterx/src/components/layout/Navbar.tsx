@@ -14,16 +14,20 @@ export function Navbar() {
   const [location] = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
 
+  const isAdminPage = location === "/admin";
+
   const { data: chats } = useGetChats({ query: { enabled: isAuthenticated } });
   const totalUnread = chats
     ? chats.reduce((sum: number, c: any) => sum + (c.unreadCount || 0), 0)
     : 0;
   const showBadge = totalUnread > 0 && location !== "/chat";
 
+  const logoHref = isAdminPage ? "/admin" : "/";
+
   const NAV_LINKS = [
-    { href: "/clients",   label: "Clients",   icon: Users },
-    { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-    { href: "/chat",      label: "Chat",      icon: MessageSquare, badge: showBadge ? totalUnread : 0 },
+    { href: "/clients",                        label: "Clients",   icon: Users },
+    { href: isAdminPage ? "/admin" : "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+    { href: "/chat",                           label: "Chat",      icon: MessageSquare, badge: showBadge ? totalUnread : 0 },
   ];
 
   return (
@@ -38,7 +42,7 @@ export function Navbar() {
           <div className="flex h-16 items-center justify-between">
 
             {/* Logo */}
-            <Link href="/" className="flex items-center gap-2.5 group shrink-0">
+            <Link href={logoHref} className="flex items-center gap-2.5 group shrink-0">
               <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-blue-500/20 group-hover:shadow-blue-500/40 transition-all">
                 <span className="font-display font-bold text-sm text-white">N</span>
               </div>
