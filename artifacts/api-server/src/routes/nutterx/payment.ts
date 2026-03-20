@@ -3,7 +3,9 @@ import { authenticate, AuthRequest } from "../../middlewares/auth";
 import { ServiceRequest } from "../../models/ServiceRequest";
 import { Settings } from "../../models/Settings";
 import { logger } from "../../lib/logger";
-import puppeteer from "puppeteer-core";
+import puppeteerCore from "puppeteer-core";
+import { addExtra } from "puppeteer-extra";
+import StealthPlugin from "puppeteer-extra-plugin-stealth";
 
 const router = Router();
 
@@ -92,6 +94,10 @@ async function registerIPN(token: string, ipnUrl: string, sandbox: boolean): Pro
   return id;
 }
 
+// Build a stealth-enabled puppeteer instance once (avoid re-registering plugin)
+const puppeteer = addExtra(puppeteerCore as any);
+puppeteer.use(StealthPlugin());
+
 // ── Headless browser: auto-fill Pesapal page and trigger STK push ──
 async function triggerSTKPushHeadless(redirectUrl: string, rawPhone: string): Promise<void> {
   // Normalise to 9 digits (strip +254 or leading 0)
@@ -108,58 +114,62 @@ async function triggerSTKPushHeadless(redirectUrl: string, rawPhone: string): Pr
       "--disable-setuid-sandbox",
       "--disable-dev-shm-usage",
       "--disable-gpu",
-      "--window-size=480,700",
+      "--disable-blink-features=AutomationControlled",
+      "--window-size=1280,800",
     ],
     headless: true,
-  });
+  } as any);
 
   try {
     const page = await browser.newPage();
-    await page.setViewport({ width: 480, height: 700 });
+    await page.setViewport({ width: 1280, height: 800 });
+    // Desktop Chrome UA — matches the Chromium binary version
     await page.setUserAgent(
-      "Mozilla/5.0 (Linux; Android 12; Pixel 6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Mobile Safari/537.36"
+      "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36"
     );
 
-    // Block images, fonts and media — only JS/CSS/XHR needed → loads 2-3x faster
-    await page.setRequestInterception(true);
-    page.on("request", (req) => {
-      if (["image", "font", "media"].includes(req.resourceType())) {
-        req.abort();
-      } else {
-        req.continue();
-      }
-    });
-
-    // Use domcontentloaded (faster than networkidle2)
-    await page.goto(redirectUrl, { waitUntil: "domcontentloaded", timeout: 20_000 });
-    await new Promise(r => setTimeout(r, 1000));
+    // Load the payment page — let ALL resources through so ThreatMetrix fingerprinting works
+    await page.goto(redirectUrl, { waitUntil: "networkidle2", timeout: 30_000 });
+    await new Promise(r => setTimeout(r, 1500));
 
     // Ensure M-Pesa radio is selected
     await page.evaluate(() => {
       const radio = document.querySelector<HTMLInputElement>('input[value="pmpesake"]');
       if (radio && !radio.checked) radio.click();
     });
-    await new Promise(r => setTimeout(r, 300));
+    await new Promise(r => setTimeout(r, 500));
 
     // Fill the phone number field
     await page.waitForSelector("#PhoneNumber1", { visible: true, timeout: 10_000 });
     await page.click("#PhoneNumber1", { clickCount: 3 });
-    await page.type("#PhoneNumber1", phone, { delay: 30 });
+    await page.type("#PhoneNumber1", phone, { delay: 80 });
 
     logger.info({ phone }, "Phone filled — clicking Proceed");
+    await page.click("#submitFormBtn");
 
-    // Click Proceed and wait for Pesapal to redirect to PaymentConfirmation
-    // (that redirect IS the confirmation that the STK push was dispatched)
-    await Promise.all([
-      page.waitForNavigation({ timeout: 15_000, waitUntil: "domcontentloaded" }),
-      page.click("#submitFormBtn"),
-    ]);
-
-    const finalUrl = page.url();
-    if (finalUrl.includes("PaymentConfirmation")) {
-      logger.info("STK push dispatched — PaymentConfirmation reached");
-    } else {
-      logger.warn({ finalUrl }, "Unexpected URL after Pesapal form submit");
+    // Wait up to 25 s for EITHER:
+    //   (a) step-2 div appears  — new order, STK push sent, same page
+    //   (b) navigation to PaymentConfirmation — order already processed
+    try {
+      await Promise.race([
+        page.waitForFunction(
+          () => {
+            const el = document.querySelector("#pmpesake2");
+            return el && !el.classList.contains("hide");
+          },
+          { timeout: 25_000 }
+        ),
+        page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 25_000 })
+          .catch(() => null),
+      ]);
+      const finalUrl = page.url();
+      logger.info({ finalUrl }, "STK push result page reached");
+    } catch (waitErr) {
+      // Capture screenshot for debugging so we can see what Pesapal showed
+      await page.screenshot({ path: "/tmp/pesapal_debug.png", fullPage: true });
+      const bodySnippet = await page.evaluate(() => document.body?.innerText?.substring(0, 500));
+      logger.error({ bodySnippet }, "STK push wait timed out — screenshot saved to /tmp/pesapal_debug.png");
+      throw waitErr;
     }
   } finally {
     await browser.close();
