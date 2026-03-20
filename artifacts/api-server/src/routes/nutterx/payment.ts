@@ -51,7 +51,8 @@ router.post("/initiate", authenticate, async (req: AuthRequest, res: Response): 
 
     const serviceReq = await ServiceRequest.findById(requestId).populate("user", "name email");
     if (!serviceReq) { res.status(404).json({ message: "Request not found" }); return; }
-    if (serviceReq.user.toString() !== req.user?._id.toString()) {
+    const serviceUserId = (serviceReq.user as any)?._id?.toString() ?? serviceReq.user.toString();
+    if (serviceUserId !== req.user?._id.toString()) {
       res.status(403).json({ message: "Not authorized" }); return;
     }
     if (!serviceReq.paymentRequired || !serviceReq.paymentAmount) {
