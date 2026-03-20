@@ -6,6 +6,10 @@ import { logger } from "../../lib/logger";
 
 const router = Router();
 
+// ── In-memory caches ─────────────────────────────────────────
+let tokenCache: { token: string; expiresAt: number; sandbox: boolean } | null = null;
+let ipnCache: { id: string; sandbox: boolean } | null = null;
+
 async function getPesapalCredentials(): Promise<{
   consumerKey: string;
   consumerSecret: string;
@@ -31,6 +35,11 @@ function pesapalBase(sandbox: boolean): string {
 }
 
 async function getPesapalToken(consumerKey: string, consumerSecret: string, sandbox: boolean): Promise<string> {
+  // Return cached token if still valid (with 60s buffer)
+  if (tokenCache && tokenCache.sandbox === sandbox && tokenCache.expiresAt > Date.now() + 60_000) {
+    return tokenCache.token;
+  }
+
   const url = `${pesapalBase(sandbox)}/api/Auth/RequestToken`;
   logger.info({ url, sandbox }, "Requesting Pesapal token");
 
@@ -41,7 +50,7 @@ async function getPesapalToken(consumerKey: string, consumerSecret: string, sand
   });
 
   const data = await res.json();
-  logger.info({ status: res.status, data }, "Pesapal token response");
+  logger.info({ status: res.status, expiryDate: data.expiryDate }, "Pesapal token response");
 
   if (!res.ok) {
     const msg = data?.error?.message || data?.message || `HTTP ${res.status}`;
@@ -53,10 +62,19 @@ async function getPesapalToken(consumerKey: string, consumerSecret: string, sand
   if (!data.token) {
     throw new Error(`Pesapal returned no token. Response: ${JSON.stringify(data)}`);
   }
+
+  // Cache token until its expiry
+  const expiresAt = data.expiryDate ? new Date(data.expiryDate).getTime() : Date.now() + 4 * 60_000;
+  tokenCache = { token: data.token, expiresAt, sandbox };
   return data.token;
 }
 
 async function registerIPN(token: string, ipnUrl: string, sandbox: boolean): Promise<string> {
+  // Return cached IPN ID if same mode
+  if (ipnCache && ipnCache.sandbox === sandbox) {
+    return ipnCache.id;
+  }
+
   const url = `${pesapalBase(sandbox)}/api/URLSetup/RegisterIPN`;
   const res = await fetch(url, {
     method: "POST",
@@ -68,8 +86,10 @@ async function registerIPN(token: string, ipnUrl: string, sandbox: boolean): Pro
     body: JSON.stringify({ url: ipnUrl, ipn_notification_type: "GET" }),
   });
   const data = await res.json();
-  logger.info({ data }, "Pesapal IPN registration");
-  return data.ipn_id || "";
+  logger.info({ ipn_id: data.ipn_id }, "Pesapal IPN registration");
+  const id = data.ipn_id || "";
+  if (id) ipnCache = { id, sandbox };
+  return id;
 }
 
 // POST /api/payment/initiate — user triggers STK push
@@ -154,8 +174,9 @@ router.post("/initiate", authenticate, async (req: AuthRequest, res: Response): 
     });
 
     res.json({
-      message: "STK push sent. Enter your M-Pesa PIN on your phone.",
+      message: "Payment order created. Opening Pesapal to trigger STK push.",
       orderTrackingId: orderData.order_tracking_id,
+      redirectUrl: orderData.redirect_url,
     });
   } catch (err: any) {
     logger.error({ err: err.message }, "Payment initiation error");

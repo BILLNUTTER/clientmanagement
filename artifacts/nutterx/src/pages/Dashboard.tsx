@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useGetMyRequests, useGetServices, useCreateRequest } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
@@ -40,19 +40,20 @@ const fadeItem = {
 };
 
 // ── Payment Modal ────────────────────────────────────────────
-type PaymentStep = "phone" | "waiting" | "success" | "failed";
+type PaymentStep = "phone" | "opening" | "waiting" | "success" | "failed";
 
 function PaymentModal({ request, onClose, onPaid }: { request: any; onClose: () => void; onPaid: () => void }) {
   const [phone, setPhone] = useState("");
   const [step, setStep] = useState<PaymentStep>("phone");
   const [error, setError] = useState("");
   const [orderId, setOrderId] = useState("");
+  const popupRef = useRef<Window | null>(null);
   const { toast } = useToast();
 
   const initiatePayment = async () => {
     const cleaned = phone.replace(/\D/g, "");
     if (cleaned.length < 9) { setError("Enter a valid phone number (e.g. 0712345678)"); return; }
-    setError(""); setStep("waiting");
+    setError(""); setStep("opening");
 
     try {
       const token = localStorage.getItem("nutterx_token");
@@ -63,11 +64,29 @@ function PaymentModal({ request, onClose, onPaid }: { request: any; onClose: () 
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Payment failed");
+
+      // Auto-open Pesapal's page in a small popup — this triggers the STK push
+      if (data.redirectUrl) {
+        const popup = window.open(
+          data.redirectUrl,
+          "pesapal_payment",
+          "width=480,height=640,left=100,top=100,resizable=yes,scrollbars=yes"
+        );
+        popupRef.current = popup;
+      }
+
       setOrderId(data.orderTrackingId || "");
+      setStep("waiting");
     } catch (err: any) {
       setStep("phone");
       setError(err.message || "Could not initiate payment");
     }
+  };
+
+  // Close the popup when payment resolves
+  const closePopup = () => {
+    try { popupRef.current?.close(); } catch { /* ignore */ }
+    popupRef.current = null;
   };
 
   useEffect(() => {
@@ -81,11 +100,13 @@ function PaymentModal({ request, onClose, onPaid }: { request: any; onClose: () 
         const data = await res.json();
         if (data.paymentStatus === "paid") {
           clearInterval(interval);
+          closePopup();
           setStep("success");
           onPaid();
           toast({ title: "Payment confirmed!", description: "Your M-Pesa payment was received." });
         } else if (data.paymentStatus === "failed" || attempts >= 36) {
           clearInterval(interval);
+          closePopup();
           setStep("failed");
         }
       } catch { /* keep polling */ }
@@ -96,7 +117,7 @@ function PaymentModal({ request, onClose, onPaid }: { request: any; onClose: () 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
       className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm"
-      onClick={e => { if (e.target === e.currentTarget && step !== "waiting") onClose(); }}>
+      onClick={e => { if (e.target === e.currentTarget && step !== "waiting" && step !== "opening") onClose(); }}>
       <motion.div
         initial={{ y: 40, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 40, opacity: 0 }}
         transition={{ type: "spring", stiffness: 300, damping: 30 }}
@@ -162,6 +183,20 @@ function PaymentModal({ request, onClose, onPaid }: { request: any; onClose: () 
               </motion.div>
             )}
 
+            {step === "opening" && (
+              <motion.div key="opening" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="text-center py-6">
+                <div className="relative w-20 h-20 mx-auto mb-5">
+                  <div className="absolute inset-0 rounded-full border-4 border-primary/20" />
+                  <div className="absolute inset-0 rounded-full border-4 border-t-primary animate-spin" />
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <Loader2 className="w-8 h-8 text-primary animate-spin" />
+                  </div>
+                </div>
+                <h3 className="text-lg font-bold mb-2">Sending payment request…</h3>
+                <p className="text-sm text-muted-foreground">Please wait while we connect to M-Pesa.</p>
+              </motion.div>
+            )}
+
             {step === "waiting" && (
               <motion.div key="waiting" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="text-center py-6">
                 <div className="relative w-20 h-20 mx-auto mb-5">
@@ -171,14 +206,14 @@ function PaymentModal({ request, onClose, onPaid }: { request: any; onClose: () 
                     <Smartphone className="w-8 h-8 text-primary" />
                   </div>
                 </div>
-                <h3 className="text-lg font-bold mb-2">Awaiting your PIN</h3>
+                <h3 className="text-lg font-bold mb-2">Check your phone</h3>
                 <p className="text-sm text-muted-foreground leading-relaxed">
-                  A prompt has been sent to <strong className="text-foreground">{phone}</strong>.<br />
-                  Enter your M-Pesa PIN to confirm <strong className="text-emerald-400">KES {request.paymentAmount?.toLocaleString()}</strong>.
+                  An M-Pesa prompt has been sent to <strong className="text-foreground">{phone}</strong>.<br />
+                  Enter your PIN to pay <strong className="text-emerald-400">KES {request.paymentAmount?.toLocaleString()}</strong>.
                 </p>
                 <div className="mt-4 flex items-center justify-center gap-2 text-xs text-muted-foreground">
                   <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                  Checking payment status every 5 seconds…
+                  Confirming payment automatically…
                 </div>
               </motion.div>
             )}
