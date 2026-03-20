@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
-import { useAdminGetUsers, useAdminGetRequests, useAdminUpdateRequest, useAdminGetSubscriptions } from "@workspace/api-client-react";
+import { useAdminGetUsers, useAdminGetRequests, useAdminUpdateRequest, useAdminGetSubscriptions, getAdminGetUsersQueryKey, getAdminGetRequestsQueryKey, getAdminGetSubscriptionsQueryKey } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { StatusBadge } from "@/components/shared/StatusBadge";
@@ -241,7 +241,7 @@ function ServiceForm({ service, onSave, onCancel }: { service?: any; onSave: (da
       </div>
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <button type="button" onClick={() => setPopular(v => !v)} className={`relative w-11 h-6 rounded-full transition-colors ${popular ? "bg-primary" : "bg-border"}`}>
+          <button type="button" onClick={() => setPopular((v: boolean) => !v)} className={`relative w-11 h-6 rounded-full transition-colors ${popular ? "bg-primary" : "bg-border"}`}>
             <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${popular ? "translate-x-5" : "translate-x-0"}`} />
           </button>
           <span className="text-sm font-medium flex items-center gap-1.5">
@@ -1051,9 +1051,9 @@ export default function Admin() {
     return () => window.removeEventListener("admin:reset", onReset);
   }, []);
 
-  const { data: requests, isLoading: reqLoading } = useAdminGetRequests({ query: { enabled: isAdmin } });
-  const { data: users, isLoading: usersLoading, refetch: refetchUsers } = useAdminGetUsers({ query: { enabled: isAdmin } });
-  const { data: subscriptions } = useAdminGetSubscriptions({ query: { enabled: isAdmin } });
+  const { data: requests, isLoading: reqLoading } = useAdminGetRequests({ query: { queryKey: getAdminGetRequestsQueryKey(), enabled: isAdmin } });
+  const { data: users, isLoading: usersLoading, refetch: refetchUsers } = useAdminGetUsers({ query: { queryKey: getAdminGetUsersQueryKey(), enabled: isAdmin } });
+  const { data: subscriptions } = useAdminGetSubscriptions({ query: { queryKey: getAdminGetSubscriptionsQueryKey(), enabled: isAdmin } });
   const updateRequestMutation = useAdminUpdateRequest();
 
   const handleAdminLoginSuccess = (token: string) => { login(token); };
@@ -1243,7 +1243,7 @@ export default function Admin() {
                       <div>
                         <div className="font-bold">{sub.serviceName}</div>
                         <div className="text-xs text-blue-300 mt-0.5">Client: {(sub.user as any)?.name}</div>
-                        <div className="mt-2"><StatusBadge status={sub.status || "in_progress"} /></div>
+                        <div className="mt-2"><StatusBadge status={(sub as any).status || "in_progress"} /></div>
                       </div>
                       <CountdownTimer endsAt={sub.subscriptionEndsAt!} compact />
                     </div>

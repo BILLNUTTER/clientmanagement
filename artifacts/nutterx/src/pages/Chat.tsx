@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useSocket } from "@/hooks/use-socket";
-import { useGetChats, useGetChatMessages, useSendMessage, useStartDirectChat } from "@workspace/api-client-react";
+import { useGetChats, useGetChatMessages, useSendMessage, useStartDirectChat, getGetChatsQueryKey, getGetChatMessagesQueryKey } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Send, User, CircleDot, MessageSquare, Headphones, ArrowLeft, Users, Pin, Search } from "lucide-react";
@@ -24,7 +24,8 @@ export default function Chat() {
 
   const { data: messages, isLoading: messagesLoading, refetch: refetchMessages } = useGetChatMessages(
     activeChatId || "",
-    { query: { enabled: !!activeChatId } }
+    undefined,
+    { query: { queryKey: getGetChatMessagesQueryKey(activeChatId || ""), enabled: !!activeChatId } }
   );
 
   const sendMessageMutation = useSendMessage();

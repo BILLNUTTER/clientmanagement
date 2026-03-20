@@ -58,7 +58,7 @@ router.post("/group", authenticate, requireAdmin, async (req: AuthRequest, res: 
 router.post("/direct/:userId", authenticate, async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const currentUserId = req.user!._id;
-    const otherUserId = new mongoose.Types.ObjectId(req.params["userId"]);
+    const otherUserId = new mongoose.Types.ObjectId(req.params["userId"] as string);
 
     let chat = await Chat.findOne({
       type: "direct",

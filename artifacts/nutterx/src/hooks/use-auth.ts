@@ -33,6 +33,7 @@ export function useAuth() {
   // Only run the query if we have a token
   const { data: user, isLoading, error } = useGetMe({
     query: {
+      queryKey: getGetMeQueryKey(),
       enabled: !!token,
       retry: false,
     }

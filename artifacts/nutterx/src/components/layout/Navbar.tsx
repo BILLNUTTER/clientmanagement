@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { useTheme } from "@/hooks/use-theme";
-import { useGetChats } from "@workspace/api-client-react";
+import { useGetChats, getGetChatsQueryKey } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { LayoutDashboard, MessageSquare, LogOut, Sun, Moon, Users, Menu, X } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -16,7 +16,7 @@ export function Navbar() {
 
   const isAdminPage = location === "/admin";
 
-  const { data: chats } = useGetChats({ query: { enabled: isAuthenticated } });
+  const { data: chats } = useGetChats({ query: { queryKey: getGetChatsQueryKey(), enabled: isAuthenticated } });
   const totalUnread = chats
     ? chats.reduce((sum: number, c: any) => sum + (c.unreadCount || 0), 0)
     : 0;

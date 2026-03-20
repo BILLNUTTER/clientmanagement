@@ -6,6 +6,32 @@ import { logger } from "../../lib/logger";
 
 const router = Router();
 
+interface PesapalTokenResponse {
+  token?: string;
+  expiryDate?: string;
+  error?: { message?: string };
+  message?: string;
+  [key: string]: unknown;
+}
+
+interface PesapalIpnResponse {
+  ipn_id?: string;
+  [key: string]: unknown;
+}
+
+interface PesapalOrderResponse {
+  order_tracking_id?: string;
+  redirect_url?: string;
+  error?: { message?: string };
+  message?: string;
+  [key: string]: unknown;
+}
+
+interface PesapalStatusResponse {
+  payment_status_description?: string;
+  [key: string]: unknown;
+}
+
 
 // ── In-memory caches ─────────────────────────────────────────
 let tokenCache: { token: string; expiresAt: number; sandbox: boolean } | null = null;
@@ -49,7 +75,7 @@ async function getPesapalToken(consumerKey: string, consumerSecret: string, sand
     body: JSON.stringify({ consumer_key: consumerKey, consumer_secret: consumerSecret }),
   });
 
-  const data = await res.json();
+  const data = await res.json() as PesapalTokenResponse;
   logger.info({ status: res.status, expiryDate: data.expiryDate }, "Pesapal token response");
 
   if (!res.ok) {
@@ -83,7 +109,7 @@ async function registerIPN(token: string, ipnUrl: string, sandbox: boolean): Pro
     },
     body: JSON.stringify({ url: ipnUrl, ipn_notification_type: "GET" }),
   });
-  const data = await res.json();
+  const data = await res.json() as PesapalIpnResponse;
   logger.info({ ipn_id: data.ipn_id }, "Pesapal IPN registration");
   const id = data.ipn_id || "";
   if (id) ipnCache = { id, sandbox };
@@ -158,7 +184,7 @@ router.post("/initiate", authenticate, async (req: AuthRequest, res: Response): 
       body: JSON.stringify(orderPayload),
     });
 
-    const orderData = await orderRes.json();
+    const orderData = await orderRes.json() as PesapalOrderResponse;
     logger.info({ status: orderRes.status, order_tracking_id: orderData.order_tracking_id }, "Pesapal order response");
 
     if (!orderRes.ok || orderData.error) {
@@ -208,7 +234,7 @@ router.get("/status/:requestId", authenticate, async (req: AuthRequest, res: Res
       { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" } }
     );
 
-    const statusData = await statusRes.json();
+    const statusData = await statusRes.json() as PesapalStatusResponse;
     let paymentStatus: "unpaid" | "pending" | "paid" | "failed" = serviceReq.paymentStatus;
 
     if (statusData.payment_status_description === "Completed") {
