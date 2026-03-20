@@ -640,116 +640,189 @@ function SettingsForm() {
   );
 }
 
-// ── Professional Numbered Table PNG Export ────────────────────
+// ── Golden Certificate PNG Export ─────────────────────────────
 async function exportAsPNG(requests: any[]) {
   const S = 2;
   const LW = 390;
   const W = LW * S;
-  const PAD = 16;
-  const HEADER_H = 104;
-  const STATS_H  = 58;
-  const TH_H     = 30;   // table header row height
-  const ROW_H    = 42;   // data row height (2-line: primary + amount/date)
-  const FOOTER_H = 46;
+  const PAD = 20;
+  const HEADER_H = 132;
+  const STATS_H  = 60;
+  const TH_H     = 30;
+  const ROW_H    = 44;   // 2-line row: name/service/status + amount/date
+  const FOOTER_H = 82;
 
   const totalH = HEADER_H + STATS_H + TH_H + requests.length * ROW_H + FOOTER_H;
-  const H = Math.max(totalH, 250) * S;
+  const H = Math.max(totalH, 300) * S;
 
   const canvas = document.createElement("canvas");
   canvas.width = W; canvas.height = H;
   const ctx = canvas.getContext("2d")!;
   ctx.scale(S, S);
-  const LH = Math.max(totalH, 250);
+  const LH = Math.max(totalH, 300);
 
-  // ── Background ──────────────────────────
+  // ── Gold palette ─────────────────────────────
+  const CREAM        = "#fefcf0";
+  const PARCHMENT    = "#f9f0d0";
+  const GOLD_DARK    = "#7a5200";
+  const GOLD_MID     = "#c89000";
+  const GOLD_BRIGHT  = "#e8b420";
+  const GOLD_LIGHT   = "#f5d878";
+  const TEXT_DARK    = "#1a0800";
+  const TEXT_MID     = "#3d2000";
+  const TEXT_MUTED   = "#7a5c1a";
+  const ROW_ALT      = "#fdf3cc";
+
+  // ── Cream parchment background ───────────────
   const bg = ctx.createLinearGradient(0, 0, 0, LH);
-  bg.addColorStop(0, "#070e1f");
-  bg.addColorStop(1, "#0c1628");
+  bg.addColorStop(0, CREAM);
+  bg.addColorStop(0.5, "#fffef5");
+  bg.addColorStop(1, PARCHMENT);
   ctx.fillStyle = bg; ctx.fillRect(0, 0, LW, LH);
 
-  // ── Top accent bar ──────────────────────
-  const acc = ctx.createLinearGradient(0, 0, LW, 0);
-  acc.addColorStop(0, "#3b82f6");
-  acc.addColorStop(0.5, "#6366f1");
-  acc.addColorStop(1, "#a855f7");
-  ctx.fillStyle = acc; ctx.fillRect(0, 0, LW, 4);
+  // ── Outer gold border (thick) ────────────────────────────────
+  ctx.strokeStyle = GOLD_MID; ctx.lineWidth = 5;
+  ctx.strokeRect(5, 5, LW - 10, LH - 10);
 
-  // ── Logo ────────────────────────────────
-  const lg = ctx.createLinearGradient(PAD, 16, PAD + 40, 56);
-  lg.addColorStop(0, "#3b82f6"); lg.addColorStop(1, "#6366f1");
-  ctx.fillStyle = lg;
-  ctx.beginPath(); ctx.roundRect(PAD, 16, 40, 40, 9); ctx.fill();
-  ctx.fillStyle = "#fff"; ctx.font = "bold 20px sans-serif"; ctx.textAlign = "center";
-  ctx.fillText("N", PAD + 20, 43);
+  // ── Inner gold border (thin, dashed) ─────────────────────────
+  ctx.save();
+  ctx.strokeStyle = GOLD_BRIGHT; ctx.lineWidth = 1;
+  ctx.setLineDash([5, 4]);
+  ctx.strokeRect(11, 11, LW - 22, LH - 22);
+  ctx.setLineDash([]);
+  ctx.restore();
 
-  // ── Title block ─────────────────────────
+  // ── Corner ornaments (gold diamonds) ─────────────────────────
+  const corners = [[14,14],[LW-14,14],[14,LH-14],[LW-14,LH-14]] as [number,number][];
+  corners.forEach(([cx,cy]) => {
+    ctx.fillStyle = GOLD_BRIGHT;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - 5); ctx.lineTo(cx + 5, cy);
+    ctx.lineTo(cx, cy + 5); ctx.lineTo(cx - 5, cy);
+    ctx.closePath(); ctx.fill();
+  });
+
+  // ── Diagonal watermark ───────────────────────────────────────
+  ctx.save();
+  ctx.translate(LW / 2, LH / 2 + 20);
+  ctx.rotate(-32 * Math.PI / 180);
+  ctx.globalAlpha = 0.055;
+  ctx.fillStyle = GOLD_DARK;
+  ctx.font = "bold 58px sans-serif"; ctx.textAlign = "center";
+  ctx.fillText("NUTTERX", 0, 0);
+  ctx.font = "bold 26px sans-serif";
+  ctx.fillText("TECHNOLOGIES", 0, 42);
+  ctx.restore();
+
+  // ── Logo badge (centered) ─────────────────────────────────────
+  const LOGO_CX = LW / 2;
+  const LOGO_CY = 30;
+  const LOGO_R  = 18;
+  const lgGrad = ctx.createRadialGradient(LOGO_CX - 4, LOGO_CY - 4, 2, LOGO_CX, LOGO_CY, LOGO_R);
+  lgGrad.addColorStop(0, GOLD_BRIGHT);
+  lgGrad.addColorStop(0.6, GOLD_MID);
+  lgGrad.addColorStop(1, GOLD_DARK);
+  ctx.fillStyle = lgGrad;
+  ctx.beginPath(); ctx.arc(LOGO_CX, LOGO_CY, LOGO_R, 0, Math.PI * 2); ctx.fill();
+  // Ring around badge
+  ctx.strokeStyle = GOLD_BRIGHT; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.arc(LOGO_CX, LOGO_CY, LOGO_R + 3, 0, Math.PI * 2); ctx.stroke();
+  // N letter
+  ctx.fillStyle = TEXT_DARK; ctx.font = "bold 16px sans-serif"; ctx.textAlign = "center";
+  ctx.fillText("N", LOGO_CX, LOGO_CY + 6);
+
+  // ── Company name ─────────────────────────────────────────────
+  ctx.textAlign = "center";
+  const goldTitle = ctx.createLinearGradient(LW * 0.2, 0, LW * 0.8, 0);
+  goldTitle.addColorStop(0, GOLD_DARK);
+  goldTitle.addColorStop(0.5, GOLD_BRIGHT);
+  goldTitle.addColorStop(1, GOLD_DARK);
+  ctx.fillStyle = goldTitle; ctx.font = "bold 13.5px sans-serif";
+  ctx.fillText("NUTTERX TECHNOLOGIES", LOGO_CX, 68);
+
+  // ── Certificate subtitle ──────────────────────────────────────
+  ctx.fillStyle = TEXT_MID; ctx.font = "9.5px sans-serif";
+  ctx.letterSpacing = "2px";
+  ctx.fillText("CLIENT  SERVICES  CERTIFICATE", LOGO_CX, 82);
+  ctx.letterSpacing = "0px";
+
+  // ── Decorative ornament line ──────────────────────────────────
+  const ornY = 91;
+  ctx.strokeStyle = GOLD_MID; ctx.lineWidth = 0.8;
+  ctx.beginPath(); ctx.moveTo(PAD + 30, ornY); ctx.lineTo(LW / 2 - 16, ornY); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(LW / 2 + 16, ornY); ctx.lineTo(LW - PAD - 30, ornY); ctx.stroke();
+  // Centre diamond on ornament line
+  ctx.fillStyle = GOLD_BRIGHT;
+  ctx.beginPath();
+  ctx.moveTo(LW/2, ornY - 4); ctx.lineTo(LW/2 + 5, ornY);
+  ctx.lineTo(LW/2, ornY + 4); ctx.lineTo(LW/2 - 5, ornY);
+  ctx.closePath(); ctx.fill();
+
+  // ── Date (left) and REF (right) ───────────────────────────────
+  const dateStr = new Date().toLocaleDateString("en-KE", { day: "2-digit", month: "long", year: "numeric" });
+  const refStr  = `REF-${Date.now().toString().slice(-8)}`;
+  ctx.fillStyle = TEXT_MUTED; ctx.font = "8px sans-serif";
+  ctx.textAlign = "left";  ctx.fillText(dateStr, PAD + 4, 106);
+  ctx.textAlign = "right"; ctx.fillText(refStr,  LW - PAD - 4, 106);
   ctx.textAlign = "left";
-  ctx.fillStyle = "#f0f4ff"; ctx.font = "bold 15px sans-serif";
-  ctx.fillText("Nutterx Technologies", PAD + 50, 31);
-  ctx.fillStyle = "#64748b"; ctx.font = "10px sans-serif";
-  ctx.fillText("Client Services Report", PAD + 50, 45);
-  ctx.fillStyle = "#334155"; ctx.font = "10px sans-serif";
-  ctx.fillText(new Date().toLocaleDateString("en-KE", { year: "numeric", month: "long", day: "numeric" }), PAD + 50, 58);
 
-  // Report number / reference
-  ctx.fillStyle = "#1e3a5f"; ctx.font = "9px sans-serif";
-  ctx.textAlign = "right";
-  ctx.fillText(`REF-${Date.now().toString().slice(-8)}`, LW - PAD, 31);
-  ctx.fillText(`${requests.length} records`, LW - PAD, 44);
-  ctx.textAlign = "left";
+  // ── Thin gold divider ──────────────────────────────────────────
+  ctx.strokeStyle = GOLD_LIGHT; ctx.lineWidth = 0.8;
+  ctx.beginPath(); ctx.moveTo(PAD, 114); ctx.lineTo(LW - PAD, 114); ctx.stroke();
 
-  // ── Divider ─────────────────────────────
-  const divY = HEADER_H - 14;
-  ctx.strokeStyle = "rgba(255,255,255,0.07)"; ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.moveTo(PAD, divY); ctx.lineTo(LW - PAD, divY); ctx.stroke();
-
-  // ── Stats row ───────────────────────────
+  // ── Stats row ─────────────────────────────────────────────────
   const statsData = [
-    { label: "Total",       value: requests.length,                                                color: "#60a5fa" },
-    { label: "In Progress", value: requests.filter((r: any) => r.status === "in_progress").length, color: "#818cf8" },
-    { label: "Completed",   value: requests.filter((r: any) => r.status === "completed").length,   color: "#34d399" },
-    { label: "Paid",        value: requests.filter((r: any) => r.paymentStatus === "paid").length, color: "#a78bfa" },
+    { label: "Total",    value: requests.length,                                                 },
+    { label: "Active",   value: requests.filter((r: any) => r.status === "in_progress").length, },
+    { label: "Done",     value: requests.filter((r: any) => r.status === "completed").length,   },
+    { label: "Paid",     value: requests.filter((r: any) => r.paymentStatus === "paid").length, },
   ];
-  const SW = (LW - PAD * 2 - 9) / 4;
-  const SY = HEADER_H - 10;
+  const SW    = (LW - PAD * 2 - 9) / 4;
+  const SY    = HEADER_H - 8;
+  const statBg = ctx.createLinearGradient(0, SY, 0, SY + 46);
+  statBg.addColorStop(0, "#fdf5d0");
+  statBg.addColorStop(1, "#fae8a0");
+
   statsData.forEach((st, i) => {
     const sx = PAD + i * (SW + 3);
-    ctx.fillStyle = "rgba(255,255,255,0.035)";
-    ctx.beginPath(); ctx.roundRect(sx, SY, SW, 44, 6); ctx.fill();
-    ctx.strokeStyle = "rgba(255,255,255,0.06)"; ctx.lineWidth = 0.5;
-    ctx.beginPath(); ctx.roundRect(sx, SY, SW, 44, 6); ctx.stroke();
-    ctx.fillStyle = st.color; ctx.font = "bold 18px sans-serif"; ctx.textAlign = "center";
-    ctx.fillText(String(st.value), sx + SW / 2, SY + 22);
-    ctx.fillStyle = "#475569"; ctx.font = "8.5px sans-serif";
-    ctx.fillText(st.label, sx + SW / 2, SY + 35);
+    ctx.fillStyle = statBg;
+    ctx.beginPath(); ctx.roundRect(sx, SY, SW, 46, 5); ctx.fill();
+    ctx.strokeStyle = GOLD_MID; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.roundRect(sx, SY, SW, 46, 5); ctx.stroke();
+    // value
+    const numGrad = ctx.createLinearGradient(sx, SY, sx, SY + 30);
+    numGrad.addColorStop(0, GOLD_BRIGHT);
+    numGrad.addColorStop(1, GOLD_DARK);
+    ctx.fillStyle = numGrad; ctx.font = "bold 20px sans-serif"; ctx.textAlign = "center";
+    ctx.fillText(String(st.value), sx + SW / 2, SY + 24);
+    ctx.fillStyle = TEXT_MUTED; ctx.font = "7.5px sans-serif";
+    ctx.fillText(st.label, sx + SW / 2, SY + 38);
   });
   ctx.textAlign = "left";
 
   // ── Table layout ──────────────────────────────────────────────
-  // Rows are 2-line: primary info on line 1, amount + end date on line 2
   const tableTop = HEADER_H + STATS_H;
-  const CW = LW - PAD * 2; // 358px content width
+  const CW       = LW - PAD * 2; // content width
 
-  // Column x positions and widths
-  const C_NUM  = { x: PAD,       w: 22  }; // #
-  const C_NAME = { x: PAD + 22,  w: 118 }; // Name / KES amount (line 2)
-  const C_SVC  = { x: PAD + 140, w: 106 }; // Service / (empty line 2)
-  const C_STAT = { x: PAD + 246, w: 112 }; // Status / End date (line 2)
-  // 22+118+106+112 = 358 ✓
+  const C_NUM  = { x: PAD,       w: 22  };
+  const C_NAME = { x: PAD + 22,  w: 118 };
+  const C_SVC  = { x: PAD + 140, w: 106 };
+  const C_STAT = { x: PAD + 246, w: CW - 246 };
 
-  // ── Table header ─────────────────────────────────────────────
-  const thGrad = ctx.createLinearGradient(0, tableTop, LW, tableTop);
-  thGrad.addColorStop(0, "rgba(59,130,246,0.20)");
-  thGrad.addColorStop(1, "rgba(99,102,241,0.12)");
-  ctx.fillStyle = thGrad;
-  ctx.beginPath(); ctx.roundRect(PAD, tableTop, CW, TH_H, [6, 6, 0, 0]); ctx.fill();
+  // ── Table header row ──────────────────────────────────────────
+  const thBg = ctx.createLinearGradient(0, tableTop, LW, tableTop);
+  thBg.addColorStop(0, GOLD_DARK);
+  thBg.addColorStop(0.5, GOLD_MID);
+  thBg.addColorStop(1, GOLD_DARK);
+  ctx.fillStyle = thBg;
+  ctx.beginPath(); ctx.roundRect(PAD, tableTop, CW, TH_H, [5, 5, 0, 0]); ctx.fill();
 
-  ctx.fillStyle = "#7dd3fc"; ctx.font = "bold 8.5px sans-serif";
+  ctx.fillStyle = PARCHMENT; ctx.font = "bold 8px sans-serif";
   const headers = [
-    { label: "#",          cx: C_NUM.x  + C_NUM.w  / 2, align: "center" as const },
-    { label: "Client Name",cx: C_NAME.x + 3,             align: "left"   as const },
-    { label: "Service",    cx: C_SVC.x  + 3,             align: "left"   as const },
-    { label: "Status / Ends", cx: C_STAT.x + 3,          align: "left"   as const },
+    { label: "#",             cx: C_NUM.x  + C_NUM.w  / 2, align: "center" as const },
+    { label: "CLIENT NAME",   cx: C_NAME.x + 4,             align: "left"   as const },
+    { label: "SERVICE",       cx: C_SVC.x  + 4,             align: "left"   as const },
+    { label: "STATUS / ENDS", cx: C_STAT.x + 4,             align: "left"   as const },
   ];
   headers.forEach(h => {
     ctx.textAlign = h.align;
@@ -757,12 +830,12 @@ async function exportAsPNG(requests: any[]) {
   });
   ctx.textAlign = "left";
 
-  // ── Data rows (2-line each) ────────────────────────────────────
+  // ── Data rows ────────────────────────────────────────────────
   const statusColor: Record<string, string> = {
-    completed:   "#34d399",
-    in_progress: "#60a5fa",
-    pending:     "#fbbf24",
-    cancelled:   "#f87171",
+    completed:   "#0a5020",
+    in_progress: "#0a3070",
+    pending:     "#7a4000",
+    cancelled:   "#7a0a0a",
   };
   const statusLabel: Record<string, string> = {
     completed:   "Completed",
@@ -774,101 +847,123 @@ async function exportAsPNG(requests: any[]) {
   const trunc = (s: string, n: number) => !s ? "—" : s.length > n ? s.slice(0, n) + "…" : s;
   const fmtDate = (d: string | undefined) => {
     if (!d) return null;
-    const dt = new Date(d);
-    return dt.toLocaleDateString("en-KE", { day: "2-digit", month: "short", year: "numeric" });
+    return new Date(d).toLocaleDateString("en-KE", { day: "2-digit", month: "short", year: "numeric" });
   };
 
   requests.forEach((req: any, i: number) => {
-    const rowY = tableTop + TH_H + i * ROW_H;
+    const rowY  = tableTop + TH_H + i * ROW_H;
     const isEven = i % 2 === 0;
-    const user = req.user as any;
-    const paid = req.paymentStatus === "paid";
+    const user  = req.user as any;
+    const paid  = req.paymentStatus === "paid";
     const endDate = fmtDate(req.subscriptionEndsAt);
 
-    // ── Row background ─────────────────────────────────────────
-    ctx.fillStyle = isEven ? "rgba(255,255,255,0.028)" : "rgba(0,0,0,0.10)";
+    // Row background
+    ctx.fillStyle = isEven ? CREAM : ROW_ALT;
     ctx.fillRect(PAD, rowY, CW, ROW_H);
 
-    // Left accent bar for paid rows
+    // Gold left accent bar for paid rows
     if (paid) {
-      ctx.fillStyle = "rgba(52,211,153,0.18)";
+      const paidBar = ctx.createLinearGradient(0, rowY, 0, rowY + ROW_H);
+      paidBar.addColorStop(0, GOLD_BRIGHT);
+      paidBar.addColorStop(1, GOLD_MID);
+      ctx.fillStyle = paidBar;
       ctx.fillRect(PAD, rowY, 3, ROW_H);
     }
 
-    // Bottom border
-    ctx.strokeStyle = "rgba(255,255,255,0.04)"; ctx.lineWidth = 0.5;
+    // Row separator
+    ctx.strokeStyle = GOLD_LIGHT; ctx.lineWidth = 0.5;
     ctx.beginPath(); ctx.moveTo(PAD, rowY + ROW_H); ctx.lineTo(PAD + CW, rowY + ROW_H); ctx.stroke();
 
-    const L1 = rowY + ROW_H * 0.38; // line 1 baseline
-    const L2 = rowY + ROW_H * 0.76; // line 2 baseline
+    const L1 = rowY + ROW_H * 0.38;
+    const L2 = rowY + ROW_H * 0.76;
 
-    // ── # ─────────────────────────────────────────────────────
-    ctx.fillStyle = "#3b82f6"; ctx.font = "bold 8.5px sans-serif"; ctx.textAlign = "center";
+    // # number
+    ctx.fillStyle = GOLD_MID; ctx.font = "bold 8.5px sans-serif"; ctx.textAlign = "center";
     ctx.fillText(String(i + 1), C_NUM.x + C_NUM.w / 2, L1);
 
-    // ── Name (line 1) ─────────────────────────────────────────
-    ctx.fillStyle = "#e2e8f0"; ctx.font = "bold 9px sans-serif"; ctx.textAlign = "left";
-    ctx.fillText(trunc(user?.name || "—", 16), C_NAME.x + 3, L1);
+    // Name
+    ctx.fillStyle = TEXT_DARK; ctx.font = "bold 9px sans-serif"; ctx.textAlign = "left";
+    ctx.fillText(trunc(user?.name || "—", 16), C_NAME.x + 4, L1);
 
-    // ── KES Amount (line 2 under Name) ────────────────────────
+    // KES amount line 2
     if (req.paymentRequired) {
       const amtStr = `KES ${(req.paymentAmount || 0).toLocaleString()}`;
-      const tag = paid ? " · Paid ✓" : " · Pending";
-      const pColor = paid ? "#34d399" : "#fbbf24";
-      ctx.fillStyle = pColor; ctx.font = `bold 7.5px sans-serif`;
-      ctx.fillText(`${amtStr}${tag}`, C_NAME.x + 3, L2);
+      const tag    = paid ? " · Paid ✓" : " · Pending";
+      ctx.fillStyle = paid ? "#0a5020" : "#7a4000";
+      ctx.font = "bold 7.5px sans-serif";
+      ctx.fillText(`${amtStr}${tag}`, C_NAME.x + 4, L2);
     } else {
-      ctx.fillStyle = "#334155"; ctx.font = "7.5px sans-serif";
-      ctx.fillText("No payment required", C_NAME.x + 3, L2);
+      ctx.fillStyle = TEXT_MUTED; ctx.font = "7.5px sans-serif";
+      ctx.fillText("No payment", C_NAME.x + 4, L2);
     }
 
-    // ── Service (line 1) ──────────────────────────────────────
-    ctx.fillStyle = "#94a3b8"; ctx.font = "8.5px sans-serif"; ctx.textAlign = "left";
-    ctx.fillText(trunc(req.serviceName, 14), C_SVC.x + 3, L1);
+    // Service
+    ctx.fillStyle = TEXT_MID; ctx.font = "8.5px sans-serif";
+    ctx.fillText(trunc(req.serviceName, 14), C_SVC.x + 4, L1);
 
-    // ── Status (line 1) + End date (line 2) ───────────────────
-    const sc = statusColor[req.status] || "#94a3b8";
-    ctx.fillStyle = sc; ctx.font = "bold 8.5px sans-serif";
-    ctx.fillText(statusLabel[req.status] || req.status || "—", C_STAT.x + 3, L1);
+    // Status
+    ctx.fillStyle = statusColor[req.status] || TEXT_MUTED;
+    ctx.font = "bold 8.5px sans-serif";
+    ctx.fillText(statusLabel[req.status] || req.status || "—", C_STAT.x + 4, L1);
 
+    // End date
     if (endDate) {
-      ctx.fillStyle = "#64748b"; ctx.font = "7.5px sans-serif";
-      ctx.fillText(`Ends ${endDate}`, C_STAT.x + 3, L2);
+      ctx.fillStyle = TEXT_MUTED; ctx.font = "7.5px sans-serif";
+      ctx.fillText(`Ends ${endDate}`, C_STAT.x + 4, L2);
     } else {
-      ctx.fillStyle = "#1e3a5f"; ctx.font = "7.5px sans-serif";
-      ctx.fillText("No deadline set", C_STAT.x + 3, L2);
+      ctx.fillStyle = GOLD_LIGHT; ctx.font = "7.5px sans-serif";
+      ctx.fillText("No deadline", C_STAT.x + 4, L2);
     }
     ctx.textAlign = "left";
   });
 
-  // Table outer border
-  ctx.strokeStyle = "rgba(255,255,255,0.08)"; ctx.lineWidth = 1;
+  // Table outer border (gold)
   const tableH = TH_H + requests.length * ROW_H;
-  ctx.beginPath(); ctx.roundRect(PAD, tableTop, CW, tableH, [6, 6, 0, 0]); ctx.stroke();
+  ctx.strokeStyle = GOLD_MID; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.roundRect(PAD, tableTop, CW, tableH, [5, 5, 0, 0]); ctx.stroke();
 
-  // Column dividers
-  ctx.strokeStyle = "rgba(255,255,255,0.05)"; ctx.lineWidth = 0.5;
+  // Column dividers (gold)
+  ctx.strokeStyle = GOLD_LIGHT; ctx.lineWidth = 0.7;
   [C_NAME.x, C_SVC.x, C_STAT.x].forEach(cx => {
     ctx.beginPath(); ctx.moveTo(cx, tableTop); ctx.lineTo(cx, tableTop + tableH); ctx.stroke();
   });
 
   // ── Footer ───────────────────────────────────────────────────
   const FY = tableTop + tableH;
-  ctx.fillStyle = "rgba(255,255,255,0.02)";
-  ctx.fillRect(0, FY, LW, FOOTER_H);
-  ctx.strokeStyle = "rgba(255,255,255,0.06)"; ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.moveTo(0, FY); ctx.lineTo(LW, FY); ctx.stroke();
 
-  ctx.fillStyle = "#1e3a5f"; ctx.font = "9px sans-serif"; ctx.textAlign = "center";
-  ctx.fillText("Generated by Nutterx Technologies  ·  Confidential", LW / 2, FY + 18);
-  ctx.fillStyle = "#0f2540"; ctx.font = "8px sans-serif";
-  ctx.fillText(`nutterx.tech  ·  ${new Date().getFullYear()}  ·  KES = Kenya Shillings`, LW / 2, FY + 33);
+  // Gold footer divider
+  ctx.strokeStyle = GOLD_MID; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(PAD, FY + 10); ctx.lineTo(LW - PAD, FY + 10); ctx.stroke();
+
+  // Seal circle (bottom right)
+  const SC_X = LW - 46, SC_Y = FY + 42, SC_R = 26;
+  const sealBg = ctx.createRadialGradient(SC_X - 6, SC_Y - 6, 3, SC_X, SC_Y, SC_R);
+  sealBg.addColorStop(0, GOLD_LIGHT);
+  sealBg.addColorStop(0.6, GOLD_MID);
+  sealBg.addColorStop(1, GOLD_DARK);
+  ctx.fillStyle = sealBg;
+  ctx.beginPath(); ctx.arc(SC_X, SC_Y, SC_R, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = GOLD_BRIGHT; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.arc(SC_X, SC_Y, SC_R - 4, 0, Math.PI * 2); ctx.stroke();
+  ctx.fillStyle = TEXT_DARK; ctx.font = "bold 15px sans-serif"; ctx.textAlign = "center";
+  ctx.fillText("N", SC_X, SC_Y + 6);
+  ctx.fillStyle = CREAM; ctx.font = "5.5px sans-serif";
+  ctx.fillText("CERTIFIED", SC_X, SC_Y + 18);
+
+  // Footer text (left of seal)
+  ctx.textAlign = "left";
+  ctx.fillStyle = TEXT_DARK; ctx.font = "bold 8.5px sans-serif";
+  ctx.fillText("Nutterx Technologies", PAD + 4, FY + 26);
+  ctx.fillStyle = TEXT_MUTED; ctx.font = "7.5px sans-serif";
+  ctx.fillText("Official Client Services Record", PAD + 4, FY + 39);
+  ctx.fillStyle = GOLD_MID; ctx.font = "7px sans-serif";
+  ctx.fillText(`nutterx.tech  ·  ${new Date().getFullYear()}  ·  KES = Kenya Shillings`, PAD + 4, FY + 54);
 
   canvas.toBlob(blob => {
     if (!blob) return;
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
-    a.href = url; a.download = `nutterx-report-${Date.now()}.png`;
+    a.href = url; a.download = `nutterx-certificate-${Date.now()}.png`;
     document.body.appendChild(a); a.click();
     document.body.removeChild(a); URL.revokeObjectURL(url);
   }, "image/png");

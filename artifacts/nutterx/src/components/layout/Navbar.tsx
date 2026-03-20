@@ -22,7 +22,7 @@ export function Navbar() {
     : 0;
   const showBadge = totalUnread > 0 && location !== "/chat";
 
-  const logoHref = isAdminPage ? "/admin" : "/";
+  const logoHref = isAdminPage ? "/admin" : isAuthenticated ? "/dashboard" : "/";
 
   const NAV_LINKS = [
     { href: "/clients",                        label: "Clients",   icon: Users },
