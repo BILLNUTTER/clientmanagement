@@ -1,160 +1,301 @@
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
-import { Bot, Code2, Rocket, ShieldCheck, Zap, ArrowRight } from "lucide-react";
+import { ArrowRight, Bot, Globe, MessageSquare, Send, ShoppingCart, TrendingUp, Zap, ShieldCheck, Rocket, CheckCircle } from "lucide-react";
 import { useGetServices } from "@workspace/api-client-react";
+
+const serviceIcons: Record<string, React.ReactNode> = {
+  MessageSquare: <MessageSquare className="w-5 h-5" />,
+  Share2: <MessageSquare className="w-5 h-5" />,
+  Globe: <Globe className="w-5 h-5" />,
+  TrendingUp: <TrendingUp className="w-5 h-5" />,
+  Send: <Send className="w-5 h-5" />,
+  ShoppingCart: <ShoppingCart className="w-5 h-5" />,
+};
+
+const features = [
+  { icon: Zap, title: "Fast Delivery", desc: "Projects delivered on time with clear milestones and transparent progress tracking." },
+  { icon: ShieldCheck, title: "Secure & Private", desc: "Your business data is protected with enterprise-grade security from day one." },
+  { icon: Rocket, title: "Built to Scale", desc: "Solutions designed to grow as your business grows — no rework needed." },
+];
+
+const stagger = { animate: { transition: { staggerChildren: 0.08 } } };
+const fadeUp = {
+  initial: { opacity: 0, y: 20 },
+  animate: { opacity: 1, y: 0, transition: { duration: 0.45 } },
+};
 
 export default function Home() {
   const { data: services, isLoading } = useGetServices();
 
   return (
-    <div className="min-h-screen pt-20">
-      {/* Hero Section */}
-      <section className="relative overflow-hidden py-24 sm:py-32 lg:py-40">
-        <div className="absolute inset-0 -z-10">
-          <img 
-            src={`${import.meta.env.BASE_URL}images/hero-bg.png`} 
-            alt="Abstract dark tech background" 
-            className="w-full h-full object-cover opacity-40 mix-blend-screen"
-          />
-          <div className="absolute inset-0 bg-gradient-to-b from-background/10 via-background/80 to-background" />
+    <div className="min-h-screen pt-16">
+
+      {/* ── Hero ── */}
+      <section className="relative overflow-hidden">
+        {/* Background blobs */}
+        <div className="absolute inset-0 -z-10 overflow-hidden pointer-events-none">
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[900px] h-[600px] bg-gradient-radial from-blue-600/10 via-indigo-600/5 to-transparent blur-3xl" />
+          <div className="absolute -top-20 right-0 w-96 h-96 bg-indigo-500/10 blur-[120px] rounded-full" />
+          <div className="absolute bottom-0 left-0 w-72 h-72 bg-blue-500/8 blur-[100px] rounded-full" />
         </div>
 
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 text-center">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-28 sm:pt-28 sm:pb-36">
+          <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.7 }}
+            className="text-center max-w-4xl mx-auto"
+          >
+            {/* Badge */}
+            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-blue-500/30 bg-blue-500/5 text-blue-400 text-sm font-medium mb-8">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500" />
+              </span>
+              Premium Tech Services — Now Available
+            </div>
+
+            <h1 className="text-4xl sm:text-6xl lg:text-7xl font-extrabold tracking-tight mb-6 leading-tight">
+              Transform Your Ideas Into
+              <br />
+              <span className="text-gradient-primary">Digital Reality</span>
+            </h1>
+
+            <p className="text-lg sm:text-xl text-muted-foreground max-w-2xl mx-auto leading-relaxed mb-10">
+              Nutterx Technologies delivers premium software solutions — WhatsApp bots, websites, SEO, and more — built to scale your business.
+            </p>
+
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <Link href="/auth">
+                <Button variant="gradient" size="lg" className="w-full sm:w-auto gap-2 text-base font-semibold px-8 h-12 shadow-xl shadow-primary/20">
+                  Get Started <ArrowRight className="w-4 h-4" />
+                </Button>
+              </Link>
+              <a href="#services">
+                <Button variant="outline" size="lg" className="w-full sm:w-auto text-base font-medium px-8 h-12 bg-transparent">
+                  View Services
+                </Button>
+              </a>
+            </div>
+          </motion.div>
+
+          {/* Stats bar */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.7 }}
+            transition={{ delay: 0.4, duration: 0.5 }}
+            className="mt-16 grid grid-cols-3 gap-4 max-w-lg mx-auto"
           >
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full glass-panel mb-8 border-blue-500/30 text-blue-300 text-sm font-medium">
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
-              </span>
-              Next-Gen Tech Services
-            </div>
-            <h1 className="text-5xl md:text-7xl font-extrabold tracking-tight mb-8">
-              Transform Your Ideas Into <br className="hidden md:block" />
-              <span className="text-gradient-primary">Digital Reality</span>
-            </h1>
-            <p className="mt-6 text-xl text-muted-foreground max-w-2xl mx-auto leading-relaxed mb-10">
-              Nutterx Technologies provides premium software solutions, WhatsApp bot setups, and custom development services to scale your business.
-            </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Link href="/auth">
-                <Button variant="gradient" size="lg" className="w-full sm:w-auto group">
-                  Explore Services
-                  <ArrowRight className="ml-2 w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                </Button>
-              </Link>
-              <Link href="#features">
-                <Button variant="outline" size="lg" className="w-full sm:w-auto bg-black/20 backdrop-blur-md">
-                  How it works
-                </Button>
-              </Link>
-            </div>
+            {[
+              { value: "50+", label: "Projects Delivered" },
+              { value: "100%", label: "Client Satisfaction" },
+              { value: "24/7", label: "Support" },
+            ].map(s => (
+              <div key={s.label} className="text-center">
+                <div className="text-2xl sm:text-3xl font-bold text-gradient-primary">{s.value}</div>
+                <div className="text-xs sm:text-sm text-muted-foreground mt-1">{s.label}</div>
+              </div>
+            ))}
           </motion.div>
         </div>
       </section>
 
-      {/* Services Showcase */}
-      <section className="py-24 bg-black/20 border-y border-white/5 relative z-20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl font-bold font-display mb-4">Our Premium Services</h2>
-            <p className="text-muted-foreground">Everything you need to automate and scale.</p>
-          </div>
+      {/* ── Services ── */}
+      <section id="services" className="py-20 sm:py-28 border-t border-border/40">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="text-center mb-14"
+          >
+            <h2 className="text-3xl sm:text-4xl font-bold mb-3">Our Services</h2>
+            <p className="text-muted-foreground text-lg max-w-xl mx-auto">
+              Everything you need to automate, market, and scale your business.
+            </p>
+          </motion.div>
 
           {isLoading ? (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-              {[1,2,3].map(i => (
-                <div key={i} className="h-80 rounded-2xl bg-white/5 animate-pulse" />
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="h-56 rounded-2xl bg-secondary/40 animate-pulse" />
               ))}
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-              {services?.map((service, i) => (
+            <motion.div
+              variants={stagger}
+              initial="initial"
+              whileInView="animate"
+              viewport={{ once: true }}
+              className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5"
+            >
+              {services?.map((service) => (
                 <motion.div
                   key={service._id}
-                  initial={{ opacity: 0, y: 20 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ delay: i * 0.1 }}
-                  className="glass-panel p-8 rounded-3xl hover:-translate-y-2 transition-all duration-300 group cursor-pointer"
+                  variants={fadeUp}
+                  whileHover={{ y: -4 }}
+                  className="group relative bg-card border border-border hover:border-primary/30 rounded-2xl p-6 flex flex-col transition-all duration-300 hover:shadow-xl hover:shadow-primary/5 cursor-pointer"
                 >
-                  <div className="w-14 h-14 rounded-2xl bg-blue-500/10 flex items-center justify-center mb-6 group-hover:scale-110 group-hover:bg-blue-500/20 transition-all">
-                    {service.category === 'Bot' ? <Bot className="w-7 h-7 text-blue-400" /> : <Code2 className="w-7 h-7 text-indigo-400" />}
+                  {service.popular && (
+                    <span className="absolute top-4 right-4 text-xs font-semibold px-2.5 py-1 bg-primary/15 text-primary rounded-full border border-primary/20">
+                      Popular
+                    </span>
+                  )}
+
+                  <div className="w-11 h-11 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary mb-4 group-hover:bg-primary/20 transition-colors">
+                    {serviceIcons[service.icon || ""] || <Zap className="w-5 h-5" />}
                   </div>
-                  <h3 className="text-2xl font-bold mb-3">{service.title}</h3>
-                  <p className="text-muted-foreground mb-6 line-clamp-3">{service.description}</p>
-                  
-                  <div className="flex items-end justify-between mt-auto">
+
+                  <h3 className="text-lg font-bold mb-2 group-hover:text-primary transition-colors">{service.title}</h3>
+                  <p className="text-sm text-muted-foreground mb-4 flex-1 line-clamp-2">{service.description}</p>
+
+                  {service.features?.slice(0, 3).map((f: string, i: number) => (
+                    <div key={i} className="flex items-center gap-2 text-xs text-muted-foreground mb-1.5">
+                      <CheckCircle className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                      {f}
+                    </div>
+                  ))}
+
+                  <div className="mt-4 pt-4 border-t border-border flex items-center justify-between">
                     <div>
-                      <span className="text-sm text-muted-foreground">Starting from</span>
-                      <div className="text-2xl font-bold text-white">${service.price}</div>
+                      <span className="text-xs text-muted-foreground">Starting at</span>
+                      <div className="text-xl font-bold">${service.price}</div>
                     </div>
                     <Link href="/auth">
-                      <Button variant="ghost" size="icon" className="rounded-full bg-white/5 hover:bg-primary hover:text-white">
-                        <ArrowRight className="w-5 h-5" />
+                      <Button size="sm" variant="outline" className="text-xs gap-1.5 group-hover:bg-primary group-hover:text-primary-foreground group-hover:border-primary transition-all">
+                        Request <ArrowRight className="w-3.5 h-3.5" />
                       </Button>
                     </Link>
                   </div>
                 </motion.div>
               ))}
-            </div>
+            </motion.div>
           )}
         </div>
       </section>
 
-      {/* Features */}
-      <section id="features" className="py-32">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
-            <div>
-              <h2 className="text-4xl font-bold mb-6">Why choose Nutterx?</h2>
-              <p className="text-lg text-muted-foreground mb-8">
-                We combine cutting-edge technology with elegant design to deliver solutions that simply work better.
+      {/* ── Why Nutterx ── */}
+      <section id="features" className="py-20 sm:py-28 border-t border-border/40">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-20 items-center">
+
+            <motion.div
+              initial={{ opacity: 0, x: -20 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.6 }}
+            >
+              <h2 className="text-3xl sm:text-4xl font-bold mb-4">Why choose Nutterx?</h2>
+              <p className="text-lg text-muted-foreground mb-10 leading-relaxed">
+                We combine cutting-edge technology with real results — every project is built to perform, not just look good.
               </p>
-              
-              <div className="space-y-6">
-                {[
-                  { icon: Zap, title: "Lightning Fast", desc: "Optimized performance across all deliverables." },
-                  { icon: ShieldCheck, title: "Secure & Reliable", desc: "Enterprise-grade security built-in from day one." },
-                  { icon: Rocket, title: "Scalable Architecture", desc: "Ready to grow as your business expands." }
-                ].map((feature, i) => (
-                  <div key={i} className="flex gap-4">
-                    <div className="w-12 h-12 rounded-full bg-white/5 border border-white/10 flex items-center justify-center shrink-0">
-                      <feature.icon className="w-5 h-5 text-blue-400" />
+              <div className="space-y-7">
+                {features.map((f, i) => (
+                  <motion.div
+                    key={i}
+                    initial={{ opacity: 0, x: -16 }}
+                    whileInView={{ opacity: 1, x: 0 }}
+                    viewport={{ once: true }}
+                    transition={{ delay: i * 0.1, duration: 0.4 }}
+                    className="flex gap-4"
+                  >
+                    <div className="w-11 h-11 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0 mt-0.5">
+                      <f.icon className="w-5 h-5 text-primary" />
                     </div>
                     <div>
-                      <h4 className="text-xl font-semibold mb-1">{feature.title}</h4>
-                      <p className="text-muted-foreground">{feature.desc}</p>
+                      <h4 className="font-bold text-base mb-1">{f.title}</h4>
+                      <p className="text-sm text-muted-foreground leading-relaxed">{f.desc}</p>
                     </div>
-                  </div>
+                  </motion.div>
                 ))}
               </div>
-            </div>
-            <div className="relative">
-              <div className="absolute inset-0 bg-gradient-to-tr from-blue-500/20 to-indigo-500/20 blur-3xl rounded-full" />
-              <div className="glass-panel p-8 rounded-3xl relative z-10">
-                <div className="flex items-center justify-between mb-8 border-b border-white/10 pb-6">
+            </motion.div>
+
+            {/* Mock dashboard card */}
+            <motion.div
+              initial={{ opacity: 0, x: 20 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.6 }}
+              className="relative"
+            >
+              <div className="absolute inset-0 bg-gradient-to-br from-blue-500/15 to-indigo-500/15 blur-3xl rounded-3xl" />
+              <div className="relative bg-card border border-border rounded-3xl p-6 shadow-2xl">
+                <div className="flex items-center justify-between mb-6 pb-5 border-b border-border">
                   <div>
-                    <h3 className="text-xl font-bold">Client Dashboard</h3>
-                    <p className="text-sm text-muted-foreground">Manage requests seamlessly</p>
+                    <h3 className="font-bold">Client Dashboard</h3>
+                    <p className="text-xs text-muted-foreground mt-0.5">Real-time project tracking</p>
                   </div>
-                  <div className="w-3 h-3 rounded-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.8)]" />
+                  <div className="flex items-center gap-1.5 text-xs text-emerald-400 font-medium bg-emerald-500/10 border border-emerald-500/20 px-3 py-1 rounded-full">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> Live
+                  </div>
                 </div>
-                <div className="space-y-4">
-                  <div className="h-4 bg-white/10 rounded-full w-3/4 animate-pulse" />
-                  <div className="h-4 bg-white/10 rounded-full w-1/2 animate-pulse delay-75" />
-                  <div className="h-24 bg-white/5 rounded-xl border border-white/10 mt-6" />
-                  <div className="h-24 bg-white/5 rounded-xl border border-white/10" />
+                <div className="space-y-3">
+                  {[
+                    { label: "WhatsApp Bot Setup", status: "In Progress", color: "text-blue-400 bg-blue-400/10 border-blue-400/20" },
+                    { label: "SEO Optimization", status: "Completed", color: "text-emerald-400 bg-emerald-400/10 border-emerald-400/20" },
+                    { label: "Website Development", status: "Pending", color: "text-amber-400 bg-amber-400/10 border-amber-400/20" },
+                  ].map((item, i) => (
+                    <div key={i} className="flex items-center justify-between p-3.5 rounded-xl bg-secondary/30 border border-border">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center">
+                          <Bot className="w-4 h-4 text-primary" />
+                        </div>
+                        <span className="text-sm font-medium">{item.label}</span>
+                      </div>
+                      <span className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${item.color}`}>
+                        {item.status}
+                      </span>
+                    </div>
+                  ))}
                 </div>
+                <Link href="/auth">
+                  <Button variant="gradient" className="w-full mt-5 gap-2 font-semibold">
+                    Access Your Dashboard <ArrowRight className="w-4 h-4" />
+                  </Button>
+                </Link>
               </div>
-            </div>
+            </motion.div>
           </div>
         </div>
       </section>
+
+      {/* ── CTA ── */}
+      <section className="py-20 border-t border-border/40">
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 text-center">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+          >
+            <h2 className="text-3xl sm:text-4xl font-bold mb-4">Ready to get started?</h2>
+            <p className="text-lg text-muted-foreground mb-8">
+              Join businesses already growing with Nutterx Technologies.
+            </p>
+            <Link href="/auth">
+              <Button variant="gradient" size="lg" className="gap-2 px-10 h-12 text-base font-semibold shadow-xl shadow-primary/20">
+                Start Today <ArrowRight className="w-4 h-4" />
+              </Button>
+            </Link>
+          </motion.div>
+        </div>
+      </section>
+
+      {/* Footer */}
+      <footer className="border-t border-border/40 py-8">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
+              <span className="font-display font-bold text-xs text-white">N</span>
+            </div>
+            <span className="font-display font-bold text-sm">Nutterx Technologies</span>
+          </div>
+          <p className="text-xs text-muted-foreground text-center">
+            © {new Date().getFullYear()} Nutterx Technologies. All rights reserved.
+          </p>
+        </div>
+      </footer>
     </div>
   );
 }

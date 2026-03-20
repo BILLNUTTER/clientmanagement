@@ -8,7 +8,7 @@ import { formatDate } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import {
   Plus, Clock, FileText, CheckCircle, Loader2, X,
-  MessageSquare, Globe, TrendingUp, Send, ShoppingCart, Zap
+  MessageSquare, Globe, TrendingUp, Send, ShoppingCart, Zap, ChevronRight
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useForm } from "react-hook-form";
@@ -17,19 +17,25 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 
 const serviceIcons: Record<string, React.ReactNode> = {
-  MessageSquare: <MessageSquare className="w-6 h-6" />,
-  Share2: <MessageSquare className="w-6 h-6" />,
-  Globe: <Globe className="w-6 h-6" />,
-  TrendingUp: <TrendingUp className="w-6 h-6" />,
-  Send: <Send className="w-6 h-6" />,
-  ShoppingCart: <ShoppingCart className="w-6 h-6" />,
+  MessageSquare: <MessageSquare className="w-5 h-5" />,
+  Share2: <MessageSquare className="w-5 h-5" />,
+  Globe: <Globe className="w-5 h-5" />,
+  TrendingUp: <TrendingUp className="w-5 h-5" />,
+  Send: <Send className="w-5 h-5" />,
+  ShoppingCart: <ShoppingCart className="w-5 h-5" />,
 };
 
-const categoryColors: Record<string, string> = {
-  Automation: "from-blue-500/20 to-cyan-500/20 border-blue-500/20 text-blue-400",
-  Marketing: "from-purple-500/20 to-pink-500/20 border-purple-500/20 text-purple-400",
-  Development: "from-emerald-500/20 to-teal-500/20 border-emerald-500/20 text-emerald-400",
-  General: "from-amber-500/20 to-orange-500/20 border-amber-500/20 text-amber-400",
+const categoryColors: Record<string, { bg: string; text: string; border: string }> = {
+  Automation:  { bg: "bg-blue-500/10",   text: "text-blue-400",   border: "border-blue-500/20" },
+  Marketing:   { bg: "bg-purple-500/10", text: "text-purple-400", border: "border-purple-500/20" },
+  Development: { bg: "bg-emerald-500/10",text: "text-emerald-400",border: "border-emerald-500/20" },
+  General:     { bg: "bg-amber-500/10",  text: "text-amber-400",  border: "border-amber-500/20" },
+};
+
+const staggerContainer = { animate: { transition: { staggerChildren: 0.06 } } };
+const fadeItem = {
+  initial: { opacity: 0, y: 14 },
+  animate: { opacity: 1, y: 0, transition: { duration: 0.35 } },
 };
 
 export default function Dashboard() {
@@ -37,25 +43,15 @@ export default function Dashboard() {
   const [, navigate] = useLocation();
   const { data: requests, isLoading: requestsLoading } = useGetMyRequests();
   const { data: services, isLoading: servicesLoading } = useGetServices();
-
   const [selectedService, setSelectedService] = useState<any>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-
   const createRequest = useCreateRequest();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { register, handleSubmit, reset } = useForm();
 
-  const openModal = (service?: any) => {
-    setSelectedService(service || null);
-    setIsModalOpen(true);
-  };
-
-  const closeModal = () => {
-    setIsModalOpen(false);
-    setSelectedService(null);
-    reset();
-  };
+  const openModal = (service?: any) => { setSelectedService(service || null); setIsModalOpen(true); };
+  const closeModal = () => { setIsModalOpen(false); setSelectedService(null); reset(); };
 
   const onSubmit = async (data: any) => {
     try {
@@ -76,282 +72,285 @@ export default function Dashboard() {
   };
 
   const activeSubscriptions = requests?.filter(
-    r => r.status === "completed" && r.subscriptionEndsAt && new Date(r.subscriptionEndsAt) > new Date()
+    r => r.subscriptionEndsAt && new Date(r.subscriptionEndsAt) > new Date()
   ) || [];
 
-  const stats = {
-    total: requests?.length || 0,
-    pending: requests?.filter(r => r.status === "pending").length || 0,
-    inProgress: requests?.filter(r => r.status === "in_progress").length || 0,
-    completed: requests?.filter(r => r.status === "completed").length || 0,
-  };
+  const stats = [
+    { label: "Total", value: requests?.length || 0, color: "text-foreground", bg: "bg-secondary/60" },
+    { label: "Pending", value: requests?.filter(r => r.status === "pending").length || 0, color: "text-amber-400", bg: "bg-amber-500/8" },
+    { label: "In Progress", value: requests?.filter(r => r.status === "in_progress").length || 0, color: "text-blue-400", bg: "bg-blue-500/8" },
+    { label: "Completed", value: requests?.filter(r => r.status === "completed").length || 0, color: "text-emerald-400", bg: "bg-emerald-500/8" },
+  ];
 
   return (
-    <div className="min-h-screen pt-24 pb-16 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
+    <div className="min-h-screen pt-16 pb-16">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
 
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-10">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Welcome back, {user?.name}</h1>
-          <p className="text-muted-foreground mt-1">Manage your services and track progress.</p>
-        </div>
-        <div className="flex gap-3">
-          <Button variant="outline" onClick={() => navigate("/chat")} className="gap-2">
-            <MessageSquare className="w-4 h-4" /> Support Chat
-          </Button>
-          <Button variant="gradient" onClick={() => openModal()} className="gap-2">
-            <Plus className="w-4 h-4" /> Custom Request
-          </Button>
-        </div>
-      </div>
-
-      {/* Stats Row */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
-        {[
-          { label: "Total Requests", value: stats.total, color: "text-white" },
-          { label: "Pending", value: stats.pending, color: "text-amber-400" },
-          { label: "In Progress", value: stats.inProgress, color: "text-blue-400" },
-          { label: "Completed", value: stats.completed, color: "text-emerald-400" },
-        ].map((stat, i) => (
-          <motion.div
-            key={stat.label}
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.06 }}
-            className="glass-panel rounded-2xl p-5 border border-white/5"
-          >
-            <div className={cn("text-3xl font-bold", stat.color)}>{stat.value}</div>
-            <div className="text-sm text-muted-foreground mt-1">{stat.label}</div>
-          </motion.div>
-        ))}
-      </div>
-
-      {/* Active Subscriptions */}
-      {activeSubscriptions.length > 0 && (
-        <div className="mb-10">
-          <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
-            <Clock className="w-5 h-5 text-primary" /> Active Subscriptions
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {activeSubscriptions.map(sub => (
-              <motion.div
-                key={sub._id}
-                initial={{ opacity: 0, y: 16 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="glass-panel p-6 rounded-2xl relative overflow-hidden border border-emerald-500/20"
-              >
-                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 to-emerald-500" />
-                <h3 className="font-bold text-lg mb-4">{sub.serviceName}</h3>
-                <CountdownTimer endsAt={sub.subscriptionEndsAt!} />
-              </motion.div>
-            ))}
+        {/* ── Header ── */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
+              Welcome, {user?.name?.split(" ")[0]}
+            </h1>
+            <p className="text-muted-foreground text-sm mt-1">Manage your services and track progress</p>
+          </div>
+          <div className="flex gap-2.5">
+            <Button variant="outline" size="sm" onClick={() => navigate("/chat")} className="gap-2 h-9">
+              <MessageSquare className="w-3.5 h-3.5" /> Support
+            </Button>
+            <Button variant="gradient" size="sm" onClick={() => openModal()} className="gap-2 h-9">
+              <Plus className="w-3.5 h-3.5" /> New Request
+            </Button>
           </div>
         </div>
-      )}
 
-      {/* Available Services */}
-      <div className="mb-10">
-        <div className="flex items-center justify-between mb-5">
-          <h2 className="text-xl font-semibold flex items-center gap-2">
-            <Zap className="w-5 h-5 text-primary" /> Available Services
-          </h2>
-          <span className="text-sm text-muted-foreground">Click a service to request it</span>
-        </div>
+        {/* ── Stats ── */}
+        <motion.div
+          variants={staggerContainer}
+          initial="initial"
+          animate="animate"
+          className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8"
+        >
+          {stats.map(stat => (
+            <motion.div
+              key={stat.label}
+              variants={fadeItem}
+              className={cn("rounded-2xl p-4 border border-border", stat.bg)}
+            >
+              <div className={cn("text-3xl font-bold tracking-tight", stat.color)}>{stat.value}</div>
+              <div className="text-xs text-muted-foreground mt-1 font-medium">{stat.label}</div>
+            </motion.div>
+          ))}
+        </motion.div>
 
-        {servicesLoading ? (
-          <div className="flex justify-center py-12">
-            <Loader2 className="w-8 h-8 animate-spin text-primary" />
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-            {services?.map((service, i) => {
-              const colorClass = categoryColors[service.category || "General"] || categoryColors["General"];
-              return (
+        {/* ── Active Subscriptions / Countdowns ── */}
+        {activeSubscriptions.length > 0 && (
+          <div className="mb-8">
+            <h2 className="text-base font-semibold mb-3 flex items-center gap-2 text-muted-foreground uppercase tracking-wider text-xs">
+              <Clock className="w-3.5 h-3.5" /> Active Service Timers
+            </h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {activeSubscriptions.map(sub => (
                 <motion.div
-                  key={service._id}
-                  initial={{ opacity: 0, y: 16 }}
+                  key={sub._id}
+                  initial={{ opacity: 0, y: 12 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: i * 0.05 }}
-                  className="glass-panel rounded-2xl p-6 border border-white/5 hover:border-white/10 transition-all group cursor-pointer hover:shadow-2xl hover:shadow-primary/5 flex flex-col"
-                  onClick={() => openModal(service)}
+                  className="bg-card border border-border rounded-2xl p-5 relative overflow-hidden"
                 >
-                  {/* Icon + Category */}
+                  <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-500 via-primary to-indigo-500" />
                   <div className="flex items-start justify-between mb-4">
-                    <div className={cn(
-                      "w-12 h-12 rounded-xl bg-gradient-to-br flex items-center justify-center border",
-                      colorClass
-                    )}>
-                      {serviceIcons[service.icon || ""] || <Zap className="w-6 h-6" />}
+                    <div>
+                      <div className="font-semibold text-sm">{sub.serviceName}</div>
+                      <StatusBadge status={sub.status || "in_progress"} />
                     </div>
-                    {service.popular && (
-                      <span className="text-xs font-semibold px-2.5 py-1 bg-primary/20 text-primary rounded-full border border-primary/20">
-                        Popular
-                      </span>
-                    )}
                   </div>
-
-                  <h3 className="font-bold text-lg mb-2 group-hover:text-primary transition-colors">{service.title}</h3>
-                  <p className="text-sm text-muted-foreground mb-4 line-clamp-2 flex-1">{service.description}</p>
-
-                  {/* Features */}
-                  {service.features && service.features.length > 0 && (
-                    <ul className="space-y-1.5 mb-5">
-                      {service.features.slice(0, 3).map((f: string, fi: number) => (
-                        <li key={fi} className="flex items-center gap-2 text-xs text-muted-foreground">
-                          <CheckCircle className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                          {f}
-                        </li>
-                      ))}
-                      {service.features.length > 3 && (
-                        <li className="text-xs text-muted-foreground pl-5">+{service.features.length - 3} more</li>
-                      )}
-                    </ul>
-                  )}
-
-                  <div className="flex items-center justify-between mt-auto pt-3 border-t border-white/5">
-                    {service.price ? (
-                      <span className="text-lg font-bold text-white">
-                        ${service.price}<span className="text-xs font-normal text-muted-foreground">/project</span>
-                      </span>
-                    ) : (
-                      <span className="text-sm text-muted-foreground">Custom pricing</span>
-                    )}
-                    <Button
-                      size="sm"
-                      variant="gradient"
-                      className="opacity-0 group-hover:opacity-100 transition-opacity"
-                      onClick={(e) => { e.stopPropagation(); openModal(service); }}
-                    >
-                      Request
-                    </Button>
-                  </div>
+                  <CountdownTimer endsAt={sub.subscriptionEndsAt!} compact />
                 </motion.div>
-              );
-            })}
+              ))}
+            </div>
           </div>
         )}
-      </div>
 
-      {/* My Requests */}
-      <div className="glass-panel rounded-3xl overflow-hidden border border-white/5 shadow-2xl">
-        <div className="p-6 border-b border-white/5 bg-black/20">
-          <h2 className="text-xl font-semibold flex items-center gap-2">
-            <FileText className="w-5 h-5 text-primary" /> My Requests
-          </h2>
+        {/* ── Available Services ── */}
+        <div className="mb-8">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-base font-semibold text-muted-foreground uppercase tracking-wider text-xs flex items-center gap-2">
+              <Zap className="w-3.5 h-3.5" /> Available Services
+            </h2>
+            <span className="text-xs text-muted-foreground">Tap to request</span>
+          </div>
+
+          {servicesLoading ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="h-48 rounded-2xl bg-secondary/40 animate-pulse" />
+              ))}
+            </div>
+          ) : (
+            <motion.div
+              variants={staggerContainer}
+              initial="initial"
+              animate="animate"
+              className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
+            >
+              {services?.map(service => {
+                const colors = categoryColors[service.category || "General"] || categoryColors.General;
+                return (
+                  <motion.div
+                    key={service._id}
+                    variants={fadeItem}
+                    whileHover={{ y: -3 }}
+                    onClick={() => openModal(service)}
+                    className="group bg-card border border-border hover:border-primary/40 rounded-2xl p-5 cursor-pointer transition-all duration-300 hover:shadow-lg hover:shadow-primary/5 flex flex-col"
+                  >
+                    <div className="flex items-start justify-between mb-3">
+                      <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center border", colors.bg, colors.text, colors.border)}>
+                        {serviceIcons[service.icon || ""] || <Zap className="w-5 h-5" />}
+                      </div>
+                      {service.popular && (
+                        <span className="text-[10px] font-bold px-2 py-0.5 bg-primary/10 text-primary rounded-full border border-primary/20 uppercase tracking-wider">
+                          Popular
+                        </span>
+                      )}
+                    </div>
+
+                    <h3 className="font-bold text-sm mb-1.5 group-hover:text-primary transition-colors">{service.title}</h3>
+                    <p className="text-xs text-muted-foreground mb-3 line-clamp-2 flex-1 leading-relaxed">{service.description}</p>
+
+                    {service.features?.slice(0, 2).map((f: string, i: number) => (
+                      <div key={i} className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
+                        <CheckCircle className="w-3 h-3 text-emerald-400 shrink-0" />
+                        {f}
+                      </div>
+                    ))}
+
+                    <div className="flex items-center justify-between mt-3 pt-3 border-t border-border">
+                      <span className="font-bold text-sm">
+                        {service.price ? `$${service.price}` : "Custom"}
+                        <span className="text-xs font-normal text-muted-foreground"> /project</span>
+                      </span>
+                      <span className={cn("text-xs font-semibold flex items-center gap-1 transition-colors group-hover:text-primary", colors.text)}>
+                        Request <ChevronRight className="w-3.5 h-3.5" />
+                      </span>
+                    </div>
+                  </motion.div>
+                );
+              })}
+            </motion.div>
+          )}
         </div>
 
-        {requestsLoading ? (
-          <div className="p-10 flex justify-center">
-            <Loader2 className="w-8 h-8 animate-spin text-primary" />
-          </div>
-        ) : !requests?.length ? (
-          <div className="p-14 text-center text-muted-foreground flex flex-col items-center">
-            <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mb-4">
-              <FileText className="w-7 h-7 opacity-30" />
-            </div>
-            <p className="text-lg">No requests yet</p>
-            <p className="text-sm mt-1 opacity-60">Choose a service above to get started</p>
-          </div>
-        ) : (
-          <div className="divide-y divide-white/5">
-            {requests.map(req => (
-              <div
-                key={req._id}
-                className="p-5 hover:bg-white/[0.02] transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-4"
-              >
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-3 mb-1">
-                    <h4 className="font-semibold">{req.serviceName}</h4>
-                    <StatusBadge status={req.status || "pending"} />
-                  </div>
-                  <p className="text-sm text-muted-foreground line-clamp-1">{req.description}</p>
-                  <div className="text-xs text-muted-foreground mt-1.5">
-                    Submitted {formatDate(req.createdAt!)}
-                  </div>
-                  {req.adminNotes && (
-                    <div className="text-xs text-blue-400 italic mt-1.5">
-                      Admin: "{req.adminNotes}"
-                    </div>
-                  )}
-                </div>
-                {req.status === "completed" && req.subscriptionEndsAt && (
-                  <div className="shrink-0">
-                    <CountdownTimer endsAt={req.subscriptionEndsAt} compact />
-                  </div>
-                )}
+        {/* ── My Requests ── */}
+        <div>
+          <h2 className="text-base font-semibold text-muted-foreground uppercase tracking-wider text-xs flex items-center gap-2 mb-4">
+            <FileText className="w-3.5 h-3.5" /> My Requests
+          </h2>
+
+          <div className="bg-card border border-border rounded-2xl overflow-hidden">
+            {requestsLoading ? (
+              <div className="p-10 flex justify-center">
+                <Loader2 className="w-7 h-7 animate-spin text-primary" />
               </div>
-            ))}
+            ) : !requests?.length ? (
+              <div className="p-12 text-center text-muted-foreground">
+                <FileText className="w-10 h-10 mx-auto mb-3 opacity-20" />
+                <p className="font-medium">No requests yet</p>
+                <p className="text-sm mt-1 opacity-70">Choose a service above to get started</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-border">
+                {requests.map((req, i) => (
+                  <motion.div
+                    key={req._id}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: i * 0.04 }}
+                    className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center gap-3 hover:bg-secondary/20 transition-colors"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="flex flex-wrap items-center gap-2 mb-1">
+                        <span className="font-semibold text-sm">{req.serviceName}</span>
+                        <StatusBadge status={req.status || "pending"} />
+                      </div>
+                      <p className="text-xs text-muted-foreground line-clamp-1">{req.description}</p>
+                      <div className="text-xs text-muted-foreground/60 mt-1">
+                        Submitted {formatDate(req.createdAt!)}
+                      </div>
+                      {req.adminNotes && (
+                        <div className="text-xs text-primary/80 mt-1.5 bg-primary/5 rounded-lg px-2.5 py-1.5 border border-primary/10">
+                          Note: {req.adminNotes}
+                        </div>
+                      )}
+                    </div>
+                    {req.subscriptionEndsAt && (
+                      <div className="shrink-0">
+                        <CountdownTimer endsAt={req.subscriptionEndsAt} compact />
+                      </div>
+                    )}
+                  </motion.div>
+                ))}
+              </div>
+            )}
           </div>
-        )}
+        </div>
       </div>
 
-      {/* Request Modal */}
+      {/* ── Request Modal ── */}
       <AnimatePresence>
         {isModalOpen && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
+            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/70 backdrop-blur-sm"
             onClick={e => { if (e.target === e.currentTarget) closeModal(); }}
           >
             <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="glass-panel p-8 rounded-3xl w-full max-w-xl relative shadow-2xl border border-white/10 bg-[#0c1222]"
+              initial={{ opacity: 0, y: 40 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 40 }}
+              transition={{ type: "spring", stiffness: 300, damping: 30 }}
+              className="bg-card border border-border w-full sm:max-w-lg rounded-t-3xl sm:rounded-3xl shadow-2xl"
             >
-              <button onClick={closeModal} className="absolute top-5 right-5 w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/10 transition-colors text-muted-foreground">
-                <X className="w-4 h-4" />
-              </button>
+              {/* Handle bar (mobile) */}
+              <div className="flex justify-center pt-3 pb-1 sm:hidden">
+                <div className="w-10 h-1 rounded-full bg-border" />
+              </div>
 
-              <h2 className="text-2xl font-bold mb-1">
-                {selectedService ? `Request: ${selectedService.title}` : "Custom Request"}
-              </h2>
-              <p className="text-sm text-muted-foreground mb-6">
-                {selectedService ? selectedService.description : "Tell us what you need"}
-              </p>
-
-              <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
-                {!selectedService && (
+              <div className="p-6">
+                <div className="flex items-start justify-between mb-5">
                   <div>
-                    <label className="block text-sm font-medium mb-2 text-white/80">Service Name *</label>
-                    <input
-                      type="text"
-                      className="w-full h-12 rounded-xl bg-black/40 border border-white/10 px-4 text-white focus:outline-none focus:border-primary/50 transition-colors"
-                      placeholder="e.g. Custom React App"
-                      {...register("customServiceName", { required: !selectedService })}
+                    <h2 className="text-lg font-bold">
+                      {selectedService ? selectedService.title : "Custom Request"}
+                    </h2>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {selectedService ? selectedService.description : "Tell us what you need"}
+                    </p>
+                  </div>
+                  <button onClick={closeModal} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-secondary transition-colors text-muted-foreground ml-4 shrink-0">
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+                  {!selectedService && (
+                    <div>
+                      <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">Service Name *</label>
+                      <input
+                        type="text"
+                        className="w-full h-11 rounded-xl bg-secondary/50 border border-border px-4 text-sm focus:outline-none focus:border-primary/50 transition-colors"
+                        placeholder="e.g. Custom React App"
+                        {...register("customServiceName", { required: !selectedService })}
+                      />
+                    </div>
+                  )}
+                  <div>
+                    <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">Description *</label>
+                    <textarea
+                      className="w-full rounded-xl bg-secondary/50 border border-border p-3 text-sm min-h-[100px] focus:outline-none focus:border-primary/50 resize-none transition-colors"
+                      placeholder="Describe your project goals..."
+                      {...register("description", { required: true })}
                     />
                   </div>
-                )}
-
-                <div>
-                  <label className="block text-sm font-medium mb-2 text-white/80">Project Description *</label>
-                  <textarea
-                    className="w-full rounded-xl bg-black/40 border border-white/10 p-4 text-white min-h-[120px] focus:outline-none focus:border-primary/50 resize-none transition-colors"
-                    placeholder="Describe your project goals and what you need..."
-                    {...register("description", { required: true })}
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium mb-2 text-white/80">Special Requirements</label>
-                  <textarea
-                    className="w-full rounded-xl bg-black/40 border border-white/10 p-4 text-white min-h-[80px] focus:outline-none focus:border-primary/50 resize-none transition-colors"
-                    placeholder="Any specific requirements, deadlines, or notes..."
-                    {...register("requirements")}
-                  />
-                </div>
-
-                <div className="flex justify-end gap-3 pt-2">
-                  <Button type="button" variant="ghost" onClick={closeModal}>Cancel</Button>
-                  <Button type="submit" variant="gradient" disabled={createRequest.isPending} className="min-w-[130px]">
-                    {createRequest.isPending ? (
-                      <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Submitting...</>
-                    ) : "Submit Request"}
-                  </Button>
-                </div>
-              </form>
+                  <div>
+                    <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">Requirements (optional)</label>
+                    <textarea
+                      className="w-full rounded-xl bg-secondary/50 border border-border p-3 text-sm min-h-[70px] focus:outline-none focus:border-primary/50 resize-none transition-colors"
+                      placeholder="Any specific requirements or deadlines..."
+                      {...register("requirements")}
+                    />
+                  </div>
+                  <div className="flex gap-3 pt-1">
+                    <Button type="button" variant="outline" onClick={closeModal} className="flex-1 h-11">Cancel</Button>
+                    <Button type="submit" variant="gradient" disabled={createRequest.isPending} className="flex-1 h-11">
+                      {createRequest.isPending
+                        ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Submitting...</>
+                        : "Submit Request"
+                      }
+                    </Button>
+                  </div>
+                </form>
+              </div>
             </motion.div>
           </motion.div>
         )}
