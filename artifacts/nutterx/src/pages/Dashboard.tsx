@@ -936,39 +936,45 @@ export default function Dashboard() {
         )}
 
         {/* ── Pay in Advance / Extend Service ─────────────────── */}
-        {liveRequests.length > 0 && (
-          <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}
-            className="mb-8 rounded-2xl border border-indigo-500/25 bg-gradient-to-r from-indigo-500/8 via-indigo-500/5 to-transparent overflow-hidden">
-            <div className="p-5 flex flex-col sm:flex-row sm:items-center gap-4">
-              <div className="flex items-center gap-4 flex-1 min-w-0">
-                <div className="w-11 h-11 rounded-2xl bg-indigo-500/15 border border-indigo-500/25 flex items-center justify-center shrink-0">
-                  <CalendarClock className="w-6 h-6 text-indigo-400" />
-                </div>
-                <div className="min-w-0">
-                  <div className="font-bold text-sm text-indigo-300">Pay in Advance to Extend Your Service</div>
-                  <div className="text-xs text-muted-foreground mt-0.5">
-                    You have <span className="font-semibold text-indigo-300">{liveRequests.length}</span> live service{liveRequests.length !== 1 ? "s" : ""}.
-                    {" "}Pay now to extend the deadline — admin will confirm and update it for you.
-                  </div>
-                  <div className="flex flex-wrap gap-1.5 mt-2">
-                    {liveRequests.map(r => (
-                      <span key={r._id} className="inline-flex items-center gap-1 text-xs px-2.5 py-0.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 font-medium">
-                        <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse inline-block" />
-                        {r.serviceName}
-                      </span>
-                    ))}
-                  </div>
-                </div>
+        <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}
+          className="mb-8 rounded-2xl border border-indigo-500/25 bg-gradient-to-r from-indigo-500/8 via-indigo-500/5 to-transparent overflow-hidden">
+          <div className="p-5 flex flex-col sm:flex-row sm:items-center gap-4">
+            <div className="flex items-center gap-4 flex-1 min-w-0">
+              <div className="w-11 h-11 rounded-2xl bg-indigo-500/15 border border-indigo-500/25 flex items-center justify-center shrink-0">
+                <CalendarClock className="w-6 h-6 text-indigo-400" />
               </div>
-              <Button
-                onClick={() => setShowExtendModal(true)}
-                className="bg-indigo-500 hover:bg-indigo-600 text-white border-0 h-10 px-5 gap-2 shrink-0 self-start sm:self-center"
-              >
-                <DollarSign className="w-4 h-4" /> Pay in Advance
-              </Button>
+              <div className="min-w-0">
+                <div className="font-bold text-sm text-indigo-300">Pay in Advance to Extend Your Service</div>
+                {liveRequests.length > 0 ? (
+                  <>
+                    <div className="text-xs text-muted-foreground mt-0.5">
+                      Pay now to extend your deadline — admin will confirm and update it for you.
+                    </div>
+                    <div className="flex flex-wrap gap-1.5 mt-2">
+                      {liveRequests.map(r => (
+                        <span key={r._id} className="inline-flex items-center gap-1 text-xs px-2.5 py-0.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 font-medium">
+                          <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse inline-block" />
+                          {r.serviceName}
+                        </span>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <div className="text-xs text-muted-foreground mt-0.5">
+                    Available once you have an active (in-progress) service. Submit a request to get started.
+                  </div>
+                )}
+              </div>
             </div>
-          </motion.div>
-        )}
+            <Button
+              onClick={() => setShowExtendModal(true)}
+              disabled={liveRequests.length === 0}
+              className="bg-indigo-500 hover:bg-indigo-600 disabled:opacity-40 disabled:cursor-not-allowed text-white border-0 h-10 px-5 gap-2 shrink-0 self-start sm:self-center"
+            >
+              <DollarSign className="w-4 h-4" /> Pay in Advance
+            </Button>
+          </div>
+        </motion.div>
 
         {/* Available Services */}
         <div className="mb-8">
