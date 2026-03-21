@@ -516,7 +516,7 @@ function ExtensionConfirmModal({ ext, onClose, onConfirmed }: { ext: any; onClos
 
 // ── Payments Panel ────────────────────────────────────────────
 function PaymentsPanel() {
-  const [data, setData]           = useState<{ statements: any[]; totalRevenue: number; pendingAmount: number } | null>(null);
+  const [data, setData]           = useState<{ statements: any[]; totalRevenue: number; pendingAmount: number; extensionRevenue: number; extensionCount: number } | null>(null);
   const [loading, setLoading]     = useState(true);
   const [extensions, setExts]     = useState<any[]>([]);
   const [extsLoading, setExtsLoading] = useState(true);
@@ -551,7 +551,7 @@ function PaymentsPanel() {
   if (loading) return <div className="flex justify-center py-16"><Loader2 className="w-7 h-7 animate-spin text-primary" /></div>;
   if (!data) return <p className="text-muted-foreground text-center py-12">Failed to load payment data.</p>;
 
-  const { statements, totalRevenue, pendingAmount } = data;
+  const { statements, totalRevenue, pendingAmount, extensionRevenue = 0, extensionCount = 0 } = data;
   const paidCount = statements.filter(s => s.paymentStatus === "paid").length;
   const pendingCount = statements.filter(s => s.paymentStatus === "unpaid" || s.paymentStatus === "pending").length;
   const failedCount = statements.filter(s => s.paymentStatus === "failed").length;
@@ -570,7 +570,7 @@ function PaymentsPanel() {
       {/* Summary cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
         {[
-          { label: "Total Revenue",    value: `KES ${totalRevenue.toLocaleString()}`, sub: `${paidCount} paid`,    color: "text-emerald-400", bg: "bg-emerald-500/5 border-emerald-500/20", icon: TrendingUp },
+          { label: "Total Revenue",    value: `KES ${totalRevenue.toLocaleString()}`, sub: `${paidCount} service${paidCount !== 1 ? "s" : ""}${extensionCount > 0 ? ` + ${extensionCount} extension${extensionCount !== 1 ? "s" : ""} (KES ${extensionRevenue.toLocaleString()})` : ""}`,    color: "text-emerald-400", bg: "bg-emerald-500/5 border-emerald-500/20", icon: TrendingUp },
           { label: "Pending Payments", value: `KES ${pendingAmount.toLocaleString()}`, sub: `${pendingCount} pending`, color: "text-amber-400",  bg: "bg-amber-500/5 border-amber-500/20",   icon: Clock },
           { label: "Failed / Unpaid",  value: String(failedCount),  sub: "transactions", color: "text-red-400",    bg: "bg-red-500/5 border-red-500/20",     icon: AlertCircle },
           { label: "Total Requests",   value: String(statements.length), sub: "with payment", color: "text-primary", bg: "bg-primary/5 border-primary/20",     icon: DollarSign },

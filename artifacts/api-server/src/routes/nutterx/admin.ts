@@ -1,6 +1,7 @@
 import { Router, Request, Response } from "express";
 import { User } from "../../models/User";
 import { ServiceRequest } from "../../models/ServiceRequest";
+import { DeadlinePayment } from "../../models/DeadlinePayment";
 import { Chat } from "../../models/Chat";
 import { Settings } from "../../models/Settings";
 import { authenticate, requireAdmin, generateToken, AuthRequest } from "../../middlewares/auth";
@@ -229,9 +230,11 @@ router.delete("/users/:id", authenticate, requireAdmin, async (req: AuthRequest,
 // Payment statements (all requests with payment info)
 router.get("/payments", authenticate, requireAdmin, async (_req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const requests = await ServiceRequest.find({ paymentRequired: true })
-      .populate("user", "name email")
-      .sort({ createdAt: -1 });
+    const [requests, extensions] = await Promise.all([
+      ServiceRequest.find({ paymentRequired: true }).populate("user", "name email").sort({ createdAt: -1 }),
+      DeadlinePayment.find({ paymentStatus: "paid" }).populate("user", "name email").sort({ createdAt: -1 }),
+    ]);
+
     const statements = requests.map((r) => ({
       _id: r._id,
       user: r.user,
@@ -242,10 +245,16 @@ router.get("/payments", authenticate, requireAdmin, async (_req: AuthRequest, re
       paymentRequired: r.paymentRequired,
       pesapalOrderTrackingId: r.pesapalOrderTrackingId,
       createdAt: r.createdAt,
+      type: "service",
     }));
-    const totalRevenue = statements.filter(s => s.paymentStatus === "paid").reduce((sum, s) => sum + (s.paymentAmount || 0), 0);
+
+    // Confirmed extension payments count toward revenue
+    const extRevenue = extensions.reduce((sum, e) => sum + (e.amount || 0), 0);
+    const baseRevenue = statements.filter(s => s.paymentStatus === "paid").reduce((sum, s) => sum + (s.paymentAmount || 0), 0);
+    const totalRevenue = baseRevenue + extRevenue;
     const pendingAmount = statements.filter(s => s.paymentStatus === "unpaid" || s.paymentStatus === "pending").reduce((sum, s) => sum + (s.paymentAmount || 0), 0);
-    res.json({ statements, totalRevenue, pendingAmount });
+
+    res.json({ statements, totalRevenue, pendingAmount, extensionRevenue: extRevenue, extensionCount: extensions.length });
   } catch {
     res.status(500).json({ message: "Failed to fetch payment statements" });
   }
