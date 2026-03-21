@@ -589,25 +589,33 @@ function PaymentsPanel() {
         <p className="text-center text-muted-foreground py-12">No payment records yet.</p>
       ) : (
         <div className="overflow-x-auto rounded-xl border border-border">
-          <table className="w-full min-w-[550px] text-sm">
+          <table className="w-full min-w-[600px] text-sm">
             <thead>
               <tr className="bg-secondary/40 border-b border-border">
-                {["Client", "Service", "Amount", "Status", "Date"].map(h => (
+                {["Client", "Service / Purpose", "Type", "Amount", "Status", "Date"].map(h => (
                   <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-border/50">
               {statements.map((s, i) => (
-                <motion.tr key={s._id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.03 }}
-                  className="bg-card hover:bg-secondary/20 transition-colors">
+                <motion.tr key={String(s._id)} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.03 }}
+                  className={`hover:bg-secondary/20 transition-colors ${s.type === "extension" ? "bg-indigo-500/5" : "bg-card"}`}>
                   <td className="px-4 py-3">
                     <div className="font-semibold text-sm">{(s.user as any)?.name || "—"}</div>
                     <div className="text-xs text-muted-foreground">{(s.user as any)?.email || ""}</div>
                   </td>
-                  <td className="px-4 py-3 text-sm text-muted-foreground max-w-[160px] truncate">{s.serviceName}</td>
+                  <td className="px-4 py-3 max-w-[180px]">
+                    <div className="text-sm text-muted-foreground truncate">{s.serviceName}</div>
+                    {s.purpose && <div className="text-xs text-indigo-400 truncate mt-0.5">{s.purpose}</div>}
+                  </td>
                   <td className="px-4 py-3">
-                    <span className="font-bold text-sm">{s.paymentCurrency} {(s.paymentAmount || 0).toLocaleString()}</span>
+                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${s.type === "extension" ? "text-indigo-400 bg-indigo-500/10 border-indigo-500/30" : "text-sky-400 bg-sky-500/10 border-sky-500/30"}`}>
+                      {s.type === "extension" ? "Extension" : "Service"}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className="font-bold text-sm text-emerald-400">{s.paymentCurrency} {(s.paymentAmount || 0).toLocaleString()}</span>
                   </td>
                   <td className="px-4 py-3">
                     <span className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${statusColor[s.paymentStatus] || "text-muted-foreground bg-secondary border-border"}`}>

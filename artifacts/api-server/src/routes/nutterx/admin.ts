@@ -235,7 +235,7 @@ router.get("/payments", authenticate, requireAdmin, async (_req: AuthRequest, re
       DeadlinePayment.find({ paymentStatus: "paid" }).populate("user", "name email").sort({ createdAt: -1 }),
     ]);
 
-    const statements = requests.map((r) => ({
+    const serviceStatements = requests.map((r) => ({
       _id: r._id,
       user: r.user,
       serviceName: r.serviceName,
@@ -246,13 +246,33 @@ router.get("/payments", authenticate, requireAdmin, async (_req: AuthRequest, re
       pesapalOrderTrackingId: r.pesapalOrderTrackingId,
       createdAt: r.createdAt,
       type: "service",
+      purpose: null,
     }));
+
+    const extStatements = extensions.map((e) => ({
+      _id: e._id,
+      user: e.user,
+      serviceName: e.serviceName,
+      paymentAmount: e.amount,
+      paymentCurrency: e.currency || "KES",
+      paymentStatus: e.paymentStatus,
+      paymentRequired: true,
+      pesapalOrderTrackingId: e.pesapalOrderTrackingId,
+      createdAt: e.createdAt,
+      type: "extension",
+      purpose: e.purpose,
+    }));
+
+    // Merge and sort by date descending
+    const statements = [...serviceStatements, ...extStatements].sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
 
     // Confirmed extension payments count toward revenue
     const extRevenue = extensions.reduce((sum, e) => sum + (e.amount || 0), 0);
-    const baseRevenue = statements.filter(s => s.paymentStatus === "paid").reduce((sum, s) => sum + (s.paymentAmount || 0), 0);
+    const baseRevenue = serviceStatements.filter(s => s.paymentStatus === "paid").reduce((sum, s) => sum + (s.paymentAmount || 0), 0);
     const totalRevenue = baseRevenue + extRevenue;
-    const pendingAmount = statements.filter(s => s.paymentStatus === "unpaid" || s.paymentStatus === "pending").reduce((sum, s) => sum + (s.paymentAmount || 0), 0);
+    const pendingAmount = serviceStatements.filter(s => s.paymentStatus === "unpaid" || s.paymentStatus === "pending").reduce((sum, s) => sum + (s.paymentAmount || 0), 0);
 
     res.json({ statements, totalRevenue, pendingAmount, extensionRevenue: extRevenue, extensionCount: extensions.length });
   } catch {
