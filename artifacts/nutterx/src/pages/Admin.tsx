@@ -11,7 +11,7 @@ import {
   AlertCircle, ImageDown, UserPlus, Calendar, CheckCircle2, X,
   Settings, Key, Save, Loader2, Trash2, Plus, Edit2, Package,
   CreditCard, TrendingUp, DollarSign, Clock, Star, MessagesSquare,
-  Image, UserCheck, UserX, CalendarDays, CalendarClock, RefreshCw
+  Image, UserCheck, UserX, CalendarDays, CalendarClock, RefreshCw, Banknote
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
@@ -508,6 +508,109 @@ function ExtensionConfirmModal({ ext, onClose, onConfirmed }: { ext: any; onClos
           {ext.paymentStatus !== "paid" && (
             <p className="text-xs text-muted-foreground text-center">Mark as paid first, then confirm the deadline update.</p>
           )}
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
+// ── Request Payment Modal (admin → user) ─────────────────────
+function RequestPaymentModal({ request, onClose, onSent }: { request: any; onClose: () => void; onSent: () => void }) {
+  const [amount, setAmount]   = useState("");
+  const [days, setDays]       = useState("30");
+  const [purpose, setPurpose] = useState(`Service renewal for ${request.serviceName}`);
+  const [message, setMessage] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError]     = useState("");
+
+  const isExpired = request.subscriptionEndsAt && new Date(request.subscriptionEndsAt) < new Date();
+
+  async function handleSend() {
+    if (!amount || !days) { setError("Amount and days are required."); return; }
+    setError(""); setLoading(true);
+    try {
+      const token = localStorage.getItem("nutterx_token");
+      const res = await fetch("/api/extensions/admin/request", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          serviceRequestId:   request._id,
+          amount:             Number(amount),
+          adminRequestedDays: Number(days),
+          purpose:            purpose.trim() || `Service renewal for ${request.serviceName}`,
+          adminMessage:       message.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Failed to send request");
+      onSent(); onClose();
+    } catch (e: any) { setError(e.message); }
+    finally { setLoading(false); }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={onClose}>
+      <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
+        className="bg-card border border-border rounded-2xl p-6 w-full max-w-md shadow-2xl"
+        onClick={e => e.stopPropagation()}>
+
+        <div className="flex items-center justify-between mb-5">
+          <div>
+            <h3 className="text-lg font-bold flex items-center gap-2">
+              <Banknote className="w-5 h-5 text-amber-400" /> Request Payment
+            </h3>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {request.user?.name} · <span className="text-primary">{request.serviceName}</span>
+              {isExpired && <span className="ml-1.5 text-red-400 font-semibold">(Expired)</span>}
+            </p>
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-secondary transition-colors"><X className="w-4 h-4" /></button>
+        </div>
+
+        <div className="space-y-4">
+          <div>
+            <label className="text-xs font-semibold text-muted-foreground mb-1.5 block uppercase tracking-wider">Purpose / Label</label>
+            <input value={purpose} onChange={e => setPurpose(e.target.value)}
+              placeholder="Service renewal for..."
+              className="w-full rounded-xl bg-secondary/50 border border-border p-3 text-sm focus:outline-none focus:border-primary/50 transition-colors" />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground mb-1.5 block uppercase tracking-wider">Amount (KES)</label>
+              <input type="number" value={amount} onChange={e => setAmount(e.target.value)} min={1}
+                placeholder="e.g. 5000"
+                className="w-full rounded-xl bg-secondary/50 border border-border p-3 text-sm focus:outline-none focus:border-primary/50 transition-colors" />
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground mb-1.5 block uppercase tracking-wider">Days Added</label>
+              <input type="number" value={days} onChange={e => setDays(e.target.value)} min={1}
+                placeholder="e.g. 30"
+                className="w-full rounded-xl bg-secondary/50 border border-border p-3 text-sm focus:outline-none focus:border-primary/50 transition-colors" />
+            </div>
+          </div>
+
+          <div>
+            <label className="text-xs font-semibold text-muted-foreground mb-1.5 block uppercase tracking-wider">Message to Client <span className="font-normal">(optional)</span></label>
+            <textarea value={message} onChange={e => setMessage(e.target.value)}
+              placeholder="e.g. Your subscription has expired. Please renew to continue."
+              rows={3}
+              className="w-full rounded-xl bg-secondary/50 border border-border p-3 text-sm focus:outline-none focus:border-primary/50 resize-none transition-colors" />
+          </div>
+
+          <div className="bg-amber-500/8 border border-amber-500/20 rounded-xl p-3 text-xs text-amber-300">
+            Once the client pays, <span className="font-bold">{days || "?"} days</span> will be added to their service timer automatically.
+          </div>
+        </div>
+
+        {error && <p className="text-red-400 text-xs mt-3 text-center">{error}</p>}
+
+        <div className="flex gap-2 mt-5">
+          <Button variant="ghost" className="flex-1 h-10" onClick={onClose}>Cancel</Button>
+          <Button variant="gradient" className="flex-1 h-10" onClick={handleSend} disabled={loading}>
+            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Banknote className="w-4 h-4 mr-1.5" />}
+            Send Request
+          </Button>
         </div>
       </motion.div>
     </div>
@@ -1499,6 +1602,7 @@ export default function Admin() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [editingRequest, setEditingRequest] = useState<any>(null);
+  const [requestingPaymentFor, setRequestingPaymentFor] = useState<any>(null);
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
   const [, navigate] = useLocation();
 
@@ -1648,6 +1752,10 @@ export default function Admin() {
                         <div className="flex items-center gap-2 flex-wrap shrink-0">
                           <StatusBadge status={req.status || "pending"} />
                           {req.subscriptionEndsAt && <CountdownTimer endsAt={req.subscriptionEndsAt} compact />}
+                          <button onClick={() => setRequestingPaymentFor(req)}
+                            className="px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/25 text-amber-400 text-xs font-medium hover:bg-amber-500/20 transition-colors flex items-center gap-1.5">
+                            <Banknote className="w-3.5 h-3.5" /> Request Payment
+                          </button>
                           <button onClick={() => setEditingRequest(req)}
                             className="px-3 py-1.5 rounded-lg bg-primary/10 border border-primary/20 text-primary text-xs font-medium hover:bg-primary/20 transition-colors flex items-center gap-1.5">
                             <Calendar className="w-3.5 h-3.5" /> Manage
@@ -1835,6 +1943,20 @@ export default function Admin() {
       <AnimatePresence>
         {editingRequest && (
           <ManageModal request={editingRequest} onClose={() => setEditingRequest(null)} onSave={handleUpdateRequest} />
+        )}
+      </AnimatePresence>
+
+      {/* Request Payment Modal */}
+      <AnimatePresence>
+        {requestingPaymentFor && (
+          <RequestPaymentModal
+            request={requestingPaymentFor}
+            onClose={() => setRequestingPaymentFor(null)}
+            onSent={() => {
+              toast({ title: "Payment request sent", description: `${requestingPaymentFor.user?.name || "Client"} will see the request in their dashboard.` });
+              queryClient.invalidateQueries({ queryKey: getAdminGetRequestsQueryKey() });
+            }}
+          />
         )}
       </AnimatePresence>
     </motion.div>

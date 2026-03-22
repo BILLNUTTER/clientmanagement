@@ -10,7 +10,7 @@ import {
   Plus, Clock, FileText, CheckCircle, Loader2, X,
   MessageSquare, Globe, TrendingUp, Send, ShoppingCart, Zap,
   ChevronRight, Smartphone, Lock, CheckCircle2, AlertCircle, Award,
-  CalendarClock, ArrowUpRight, DollarSign, RefreshCw
+  CalendarClock, ArrowUpRight, DollarSign, RefreshCw, Banknote, Bell
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useForm } from "react-hook-form";
@@ -545,6 +545,141 @@ function downloadMembershipCertificate(user: any, requests: any[]) {
   }, "image/png");
 }
 
+// ── Admin Pay Request Modal ──────────────────────────────────
+type AdminPayStep = "ready" | "sending" | "pesapal" | "waiting" | "success" | "failed";
+
+function AdminPayRequestModal({ request, onClose, onPaid }: { request: any; onClose: () => void; onPaid: () => void }) {
+  const [step, setStep]   = useState<AdminPayStep>("ready");
+  const [iframeUrl, setIframeUrl] = useState("");
+  const [extId, setExtId] = useState("");
+  const [error, setError] = useState("");
+  const { toast } = useToast();
+
+  async function handlePay() {
+    setStep("sending"); setError("");
+    try {
+      const token = localStorage.getItem("nutterx_token");
+      const res   = await fetch(`/api/extensions/pay/${request._id}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({}),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Failed to initiate payment");
+
+      setExtId(data.extensionId);
+      if (data.redirectUrl) {
+        setIframeUrl(data.redirectUrl);
+        setStep("pesapal");
+      } else {
+        setStep("waiting");
+      }
+    } catch (e: any) {
+      setError(e.message);
+      setStep("failed");
+    }
+  }
+
+  useEffect(() => {
+    if (step !== "waiting" && step !== "pesapal") return;
+    if (!extId) return;
+    const id = setInterval(async () => {
+      try {
+        const token = localStorage.getItem("nutterx_token");
+        const res   = await fetch(`/api/extensions/status/${extId}`, { headers: { Authorization: `Bearer ${token}` } });
+        const data  = await res.json();
+        if (data.paymentStatus === "paid") {
+          clearInterval(id);
+          setStep("success");
+          toast({ title: "Payment confirmed!", description: "Your service timer has been updated." });
+          onPaid();
+        } else if (data.paymentStatus === "failed") {
+          clearInterval(id);
+          setStep("failed");
+          setError("Payment was not completed.");
+        }
+      } catch {}
+    }, 4000);
+    return () => clearInterval(id);
+  }, [step, extId]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4" onClick={onClose}>
+      <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
+        className="bg-card border border-amber-500/30 rounded-2xl p-6 w-full max-w-md shadow-2xl"
+        onClick={e => e.stopPropagation()}>
+
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-bold flex items-center gap-2">
+            <Banknote className="w-5 h-5 text-amber-400" /> Payment Request
+          </h3>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-secondary"><X className="w-4 h-4" /></button>
+        </div>
+
+        {step === "ready" && (
+          <>
+            <div className="bg-amber-500/8 border border-amber-500/25 rounded-xl p-4 mb-5 space-y-2">
+              <div className="flex items-center gap-2 text-amber-400 font-semibold text-sm">
+                <Bell className="w-4 h-4" /> Nutterx has requested a payment
+              </div>
+              <div className="text-sm"><span className="text-muted-foreground">Service:</span> <span className="font-semibold">{request.serviceName}</span></div>
+              <div className="text-sm"><span className="text-muted-foreground">Purpose:</span> {request.purpose}</div>
+              <div className="text-sm"><span className="text-muted-foreground">Amount:</span> <span className="font-bold text-emerald-400">KES {(request.amount || 0).toLocaleString()}</span></div>
+              <div className="text-sm"><span className="text-muted-foreground">Days added on payment:</span> <span className="font-bold text-primary">{request.adminRequestedDays} days</span></div>
+              {request.adminMessage && (
+                <div className="mt-2 pt-2 border-t border-amber-500/20 text-xs text-muted-foreground italic">"{request.adminMessage}"</div>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground mb-5">Once your payment is confirmed, <strong className="text-foreground">{request.adminRequestedDays} days</strong> will be added to your service timer automatically.</p>
+            <button onClick={handlePay}
+              className="w-full h-11 flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-semibold transition-all">
+              <Banknote className="w-4 h-4" /> Pay KES {(request.amount || 0).toLocaleString()} via M-Pesa
+            </button>
+          </>
+        )}
+
+        {step === "sending" && (
+          <div className="flex flex-col items-center py-8 gap-3">
+            <Loader2 className="w-8 h-8 animate-spin text-primary" />
+            <p className="text-sm text-muted-foreground">Setting up payment...</p>
+          </div>
+        )}
+
+        {step === "pesapal" && iframeUrl && (
+          <div className="space-y-3">
+            <p className="text-xs text-muted-foreground text-center">Complete your payment in the window below, then wait for confirmation.</p>
+            <iframe src={iframeUrl} className="w-full rounded-xl border border-border" style={{ height: 420 }} title="Pesapal Payment" />
+          </div>
+        )}
+
+        {(step === "pesapal" || step === "waiting") && (
+          <div className="flex items-center gap-2 mt-4 p-3 rounded-xl bg-secondary/50 text-xs text-muted-foreground">
+            <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" /> Waiting for payment confirmation…
+          </div>
+        )}
+
+        {step === "success" && (
+          <div className="flex flex-col items-center py-8 gap-3">
+            <CheckCircle2 className="w-12 h-12 text-emerald-400" />
+            <p className="text-lg font-bold text-emerald-400">Payment confirmed!</p>
+            <p className="text-sm text-muted-foreground text-center">Your service timer has been updated with the new days.</p>
+            <button onClick={onClose} className="mt-2 px-6 py-2 rounded-xl bg-emerald-500 text-white font-semibold text-sm hover:bg-emerald-600 transition-colors">Done</button>
+          </div>
+        )}
+
+        {step === "failed" && (
+          <div className="flex flex-col items-center py-8 gap-3">
+            <AlertCircle className="w-12 h-12 text-red-400" />
+            <p className="text-base font-bold text-red-400">Payment failed</p>
+            {error && <p className="text-xs text-muted-foreground text-center">{error}</p>}
+            <button onClick={() => setStep("ready")} className="mt-2 px-6 py-2 rounded-xl bg-secondary border border-border text-sm font-semibold hover:bg-secondary/80 transition-colors">Try again</button>
+          </div>
+        )}
+      </motion.div>
+    </div>
+  );
+}
+
 // ── Extend Service Modal ─────────────────────────────────────
 type ExtStep = "form" | "sending" | "pesapal" | "waiting" | "success" | "failed";
 
@@ -800,6 +935,8 @@ export default function Dashboard() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [payingRequest, setPayingRequest] = useState<any>(null);
   const [showExtendModal, setShowExtendModal] = useState(false);
+  const [adminPayRequests, setAdminPayRequests] = useState<any[]>([]);
+  const [payingAdminReq, setPayingAdminReq] = useState<any>(null);
   const createRequest = useCreateRequest();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -847,6 +984,18 @@ export default function Dashboard() {
       if (unpaidCompleted) setPayingRequest(unpaidCompleted);
     }
   }, [requestsLoading]);
+
+  // Fetch admin-initiated payment requests
+  const fetchAdminRequests = async () => {
+    try {
+      const token = localStorage.getItem("nutterx_token");
+      const res   = await fetch("/api/extensions/my", { headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) return;
+      const data: any[] = await res.json();
+      setAdminPayRequests(data.filter(e => e.initiatedBy === "admin" && e.paymentStatus !== "paid" && e.paymentStatus !== "failed"));
+    } catch {}
+  };
+  useEffect(() => { fetchAdminRequests(); }, []);
 
   const stats = [
     { label: "Total",       value: requests?.length || 0,                                          color: "text-foreground",  bg: "bg-secondary/60" },
@@ -938,6 +1087,37 @@ export default function Dashboard() {
             </div>
           </div>
         )}
+
+        {/* ── Admin Payment Requests ───────────────────────────── */}
+        <AnimatePresence>
+          {adminPayRequests.map(req => (
+            <motion.div key={req._id}
+              initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
+              className="mb-4 rounded-2xl border border-amber-500/35 bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent overflow-hidden">
+              <div className="p-5 flex flex-col sm:flex-row sm:items-center gap-4">
+                <div className="w-11 h-11 rounded-2xl bg-amber-500/15 border border-amber-500/25 flex items-center justify-center shrink-0">
+                  <Bell className="w-6 h-6 text-amber-400" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="font-bold text-sm text-amber-300 flex items-center gap-1.5">
+                    <Banknote className="w-4 h-4" /> Payment Requested by Nutterx
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-1">
+                    <span className="font-semibold text-foreground">{req.serviceName}</span> · KES <span className="font-bold text-amber-400">{(req.amount || 0).toLocaleString()}</span> · {req.adminRequestedDays} days added on payment
+                  </div>
+                  {req.adminMessage && (
+                    <div className="text-xs text-muted-foreground mt-1 italic">"{req.adminMessage}"</div>
+                  )}
+                </div>
+                <button
+                  onClick={() => setPayingAdminReq(req)}
+                  className="shrink-0 flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold transition-colors shadow-lg shadow-amber-500/20">
+                  <Banknote className="w-4 h-4" /> Pay Now
+                </button>
+              </div>
+            </motion.div>
+          ))}
+        </AnimatePresence>
 
         {/* ── Pay in Advance / Extend Service ─────────────────── */}
         <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}
@@ -1160,6 +1340,22 @@ export default function Dashboard() {
           <ExtendModal
             liveRequests={liveRequests}
             onClose={() => setShowExtendModal(false)}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Admin Payment Request Modal */}
+      <AnimatePresence>
+        {payingAdminReq && (
+          <AdminPayRequestModal
+            request={payingAdminReq}
+            onClose={() => setPayingAdminReq(null)}
+            onPaid={() => {
+              setPayingAdminReq(null);
+              fetchAdminRequests();
+              refetch();
+              queryClient.invalidateQueries({ queryKey: ["/api/requests"] });
+            }}
           />
         )}
       </AnimatePresence>

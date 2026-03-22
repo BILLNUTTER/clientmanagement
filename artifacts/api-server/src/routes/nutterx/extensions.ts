@@ -171,10 +171,11 @@ router.get("/status/:id", authenticate, async (req: AuthRequest, res: Response):
   }
 });
 
-// ── GET /api/extensions/my  (user: their own) ────────────────
+// ── GET /api/extensions/my  (user: their own + admin-requested) ──
 router.get("/my", authenticate, async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const exts = await DeadlinePayment.find({ user: req.user!._id })
+      .populate("serviceRequest", "serviceName status subscriptionEndsAt")
       .sort({ createdAt: -1 }).lean();
     res.json(exts);
   } catch (err: any) {
@@ -189,7 +190,18 @@ router.get("/ipn", async (req, res): Promise<void> => {
     if (orderTrackingId) {
       const ext = await DeadlinePayment.findOne({ pesapalOrderTrackingId: orderTrackingId });
       if (ext && ext.paymentStatus !== "paid") {
-        await DeadlinePayment.findByIdAndUpdate(ext._id, { paymentStatus: "paid" });
+        const update: any = { paymentStatus: "paid" };
+
+        // Admin-initiated request: auto-confirm + auto-start timer
+        if (ext.initiatedBy === "admin" && ext.adminRequestedDays) {
+          const deadline = new Date();
+          deadline.setDate(deadline.getDate() + ext.adminRequestedDays);
+          update.adminConfirmed = true;
+          update.newDeadline    = deadline;
+          await ServiceRequest.findByIdAndUpdate(ext.serviceRequest, { subscriptionEndsAt: deadline });
+        }
+
+        await DeadlinePayment.findByIdAndUpdate(ext._id, update);
       }
     }
     res.json({ orderNotificationType: "IPNCHANGE", orderTrackingId, orderMerchantReference, status: "200" });
@@ -236,6 +248,106 @@ router.patch("/admin/:id", authenticate, requireAdmin, async (req: AuthRequest, 
     res.json(updated);
   } catch (err: any) {
     res.status(500).json({ message: err.message || "Update failed" });
+  }
+});
+
+// ── POST /api/extensions/admin/request  (admin: request payment from user) ──
+router.post("/admin/request", authenticate, requireAdmin, async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { serviceRequestId, amount, adminMessage, adminRequestedDays, purpose } = req.body;
+    if (!serviceRequestId || !amount || !adminRequestedDays) {
+      res.status(400).json({ message: "serviceRequestId, amount, and adminRequestedDays are required" }); return;
+    }
+    const amt  = Number(amount);
+    const days = Number(adminRequestedDays);
+    if (isNaN(amt) || amt < 1) { res.status(400).json({ message: "Invalid amount" }); return; }
+    if (isNaN(days) || days < 1) { res.status(400).json({ message: "Invalid days" }); return; }
+
+    const svcReq = await ServiceRequest.findById(serviceRequestId).populate("user", "name email");
+    if (!svcReq) { res.status(404).json({ message: "Service request not found" }); return; }
+
+    // Prevent duplicate pending admin requests on the same service
+    const existing = await DeadlinePayment.findOne({
+      serviceRequest: serviceRequestId,
+      initiatedBy: "admin",
+      paymentStatus: { $in: ["unpaid", "pending"] },
+    });
+    if (existing) { res.status(409).json({ message: "A pending payment request already exists for this service." }); return; }
+
+    const ext = await DeadlinePayment.create({
+      user:               (svcReq.user as any)._id,
+      serviceRequest:     serviceRequestId,
+      serviceName:        svcReq.serviceName,
+      purpose:            purpose?.trim() || `Service renewal for ${svcReq.serviceName}`,
+      amount:             amt,
+      currency:           "KES",
+      paymentStatus:      "unpaid",
+      initiatedBy:        "admin",
+      adminMessage:       adminMessage?.trim() || "",
+      adminRequestedDays: days,
+    });
+
+    res.status(201).json(ext);
+  } catch (err: any) {
+    res.status(500).json({ message: err.message || "Failed to create payment request" });
+  }
+});
+
+// ── POST /api/extensions/pay/:id  (user: pay an admin-requested payment) ──
+router.post("/pay/:id", authenticate, async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const ext = await DeadlinePayment.findById(req.params.id).populate("serviceRequest", "serviceName status");
+    if (!ext) { res.status(404).json({ message: "Not found" }); return; }
+    if (ext.user.toString() !== req.user?._id.toString()) { res.status(403).json({ message: "Not authorized" }); return; }
+    if (ext.paymentStatus === "paid") { res.status(400).json({ message: "Already paid" }); return; }
+    if (ext.paymentStatus === "pending" && ext.pesapalOrderTrackingId) {
+      res.json({ extensionId: ext._id, orderTrackingId: ext.pesapalOrderTrackingId, redirectUrl: null });
+      return;
+    }
+
+    const creds = await getCreds();
+    if (!creds) { res.status(503).json({ message: "Payment gateway not configured. Contact admin." }); return; }
+
+    const token  = await getToken(creds.consumerKey, creds.consumerSecret, creds.sandbox);
+    const proto  = req.headers["x-forwarded-proto"] || "https";
+    const host   = req.headers.host || "localhost";
+    const ipnUrl = `${proto}://${host}/api/extensions/ipn`;
+    const notId  = await getIPN(token, ipnUrl, creds.sandbox);
+
+    const user = req.user!;
+    const orderPayload = {
+      id:              `NTX-REQ-${ext._id}-${Date.now()}`,
+      currency:        "KES",
+      amount:          ext.amount,
+      description:     ext.purpose.slice(0, 100),
+      callback_url:    `${proto}://${host}/dashboard`,
+      notification_id: notId,
+      billing_address: {
+        email_address: (user as any).email || "client@nutterx.com",
+        first_name:    (user as any).name?.split(" ")[0] || "Client",
+        last_name:     (user as any).name?.split(" ").slice(1).join(" ") || "",
+        country_code:  "KE",
+        phone_number:  "254000000000",
+      },
+    };
+
+    const orderRes  = await fetch(`${base(creds.sandbox)}/api/Transactions/SubmitOrderRequest`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify(orderPayload),
+    });
+    const orderData = await orderRes.json() as PesapalOrderResponse;
+    if (!orderRes.ok || orderData.error) throw new Error(orderData.error?.message || orderData.message || "Order failed");
+
+    await DeadlinePayment.findByIdAndUpdate(ext._id, {
+      paymentStatus:          "pending",
+      pesapalOrderTrackingId: orderData.order_tracking_id,
+    });
+
+    res.json({ extensionId: ext._id, orderTrackingId: orderData.order_tracking_id, redirectUrl: orderData.redirect_url });
+  } catch (err: any) {
+    logger.error({ err: err.message }, "Pay admin request error");
+    res.status(500).json({ message: err.message || "Payment initiation failed" });
   }
 });
 

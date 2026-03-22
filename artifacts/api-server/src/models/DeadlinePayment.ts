@@ -1,6 +1,7 @@
 import mongoose, { Document, Schema } from "mongoose";
 
 export type ExtPaymentStatus = "unpaid" | "pending" | "paid" | "failed";
+export type ExtInitiatedBy   = "user" | "admin";
 
 export interface IDeadlinePayment extends Document {
   _id: mongoose.Types.ObjectId;
@@ -15,6 +16,9 @@ export interface IDeadlinePayment extends Document {
   adminConfirmed: boolean;
   adminNotes?: string;
   newDeadline?: Date;
+  initiatedBy: ExtInitiatedBy;
+  adminMessage?: string;
+  adminRequestedDays?: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -32,6 +36,9 @@ const deadlinePaymentSchema = new Schema<IDeadlinePayment>(
     adminConfirmed: { type: Boolean, default: false },
     adminNotes:     { type: String },
     newDeadline:    { type: Date },
+    initiatedBy:    { type: String, enum: ["user","admin"], default: "user" },
+    adminMessage:   { type: String },
+    adminRequestedDays: { type: Number },
   },
   { timestamps: true }
 );
