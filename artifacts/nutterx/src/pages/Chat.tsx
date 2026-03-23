@@ -446,7 +446,9 @@ export default function Chat() {
                         onError={e => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
                     : activeChat?.type === "group"
                     ? <Users className="w-4 h-4" />
-                    : getChatAvatar(activeChat)}
+                    : activeChat
+                    ? getChatAvatar(activeChat)
+                    : "?"}
                   {activeChatOtherId && isOnline(activeChatOtherId) && (
                     <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-[#25D366] border-2 border-[#075E54] rounded-full" />
                   )}
