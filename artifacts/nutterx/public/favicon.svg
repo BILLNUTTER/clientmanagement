@@ -1,44 +1,43 @@
 <svg width="256" height="256" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <linearGradient id="bgGrad" x1="0" y1="0" x2="256" y2="256" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#1A1200"/>
-      <stop offset="100%" stop-color="#0D0C08"/>
+    <linearGradient id="bg" x1="128" y1="0" x2="128" y2="256" gradientUnits="userSpaceOnUse">
+      <stop offset="0%"   stop-color="#fefcf0"/>
+      <stop offset="50%"  stop-color="#fffef5"/>
+      <stop offset="100%" stop-color="#f9f0d0"/>
     </linearGradient>
-    <linearGradient id="ringGrad" x1="0" y1="0" x2="256" y2="256" gradientUnits="userSpaceOnUse">
-      <stop offset="0%"   stop-color="#FFE566"/>
-      <stop offset="35%"  stop-color="#D4A017"/>
-      <stop offset="65%"  stop-color="#F5C518"/>
-      <stop offset="100%" stop-color="#FFE566"/>
+    <linearGradient id="ro" x1="0" y1="0" x2="256" y2="256" gradientUnits="userSpaceOnUse">
+      <stop offset="0%"   stop-color="#f5d878"/>
+      <stop offset="40%"  stop-color="#c89000"/>
+      <stop offset="100%" stop-color="#e8b420"/>
     </linearGradient>
-    <linearGradient id="nGrad" x1="128" y1="48" x2="128" y2="210" gradientUnits="userSpaceOnUse">
-      <stop offset="0%"   stop-color="#FFE566"/>
-      <stop offset="45%"  stop-color="#F5C518"/>
-      <stop offset="100%" stop-color="#D4A017"/>
+    <linearGradient id="ri" x1="0" y1="0" x2="256" y2="256" gradientUnits="userSpaceOnUse">
+      <stop offset="0%"   stop-color="#e8b420"/>
+      <stop offset="100%" stop-color="#c89000"/>
     </linearGradient>
-    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
-      <feGaussianBlur stdDeviation="6" result="blur"/>
-      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
-    </filter>
+    <linearGradient id="ng" x1="128" y1="72" x2="128" y2="184" gradientUnits="userSpaceOnUse">
+      <stop offset="0%"   stop-color="#e8b420"/>
+      <stop offset="50%"  stop-color="#c89000"/>
+      <stop offset="100%" stop-color="#7a5200"/>
+    </linearGradient>
+    <clipPath id="circ">
+      <circle cx="128" cy="128" r="121"/>
+    </clipPath>
   </defs>
 
-  <!-- Dark circular background -->
-  <circle cx="128" cy="128" r="124" fill="url(#bgGrad)"/>
+  <!-- Parchment background, clipped to circle -->
+  <circle cx="128" cy="128" r="121" fill="url(#bg)"/>
 
-  <!-- Outer golden ring -->
-  <circle cx="128" cy="128" r="118" fill="none" stroke="url(#ringGrad)" stroke-width="6"/>
+  <!-- Outer gold ring -->
+  <circle cx="128" cy="128" r="121" fill="none" stroke="url(#ro)" stroke-width="6"/>
 
-  <!-- Inner thin ring accent -->
-  <circle cx="128" cy="128" r="108" fill="none" stroke="url(#ringGrad)" stroke-width="1.5" opacity="0.35"/>
+  <!-- Inner accent ring -->
+  <circle cx="128" cy="128" r="112" fill="none" stroke="url(#ri)" stroke-width="1.2" opacity="0.55"/>
 
-  <!-- Golden N — drawn as a path for crisp cross-platform rendering -->
+  <!-- Bold N — smaller, centred (height ~112px, width ~80px in 256 viewbox) -->
   <!-- Left vertical bar -->
-  <rect x="52" y="50" width="28" height="156" rx="5" fill="url(#nGrad)" filter="url(#glow)"/>
+  <rect x="88" y="72" width="18" height="112" rx="4" fill="url(#ng)"/>
   <!-- Right vertical bar -->
-  <rect x="176" y="50" width="28" height="156" rx="5" fill="url(#nGrad)" filter="url(#glow)"/>
-  <!-- Diagonal stroke of N -->
-  <polygon
-    points="52,50 80,50 204,206 176,206"
-    fill="url(#nGrad)"
-    filter="url(#glow)"
-  />
+  <rect x="150" y="72" width="18" height="112" rx="4" fill="url(#ng)"/>
+  <!-- Diagonal stroke -->
+  <polygon points="88,72 106,72 168,184 150,184" fill="url(#ng)"/>
 </svg>
