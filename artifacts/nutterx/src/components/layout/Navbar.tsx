@@ -59,25 +59,32 @@ export function Navbar() {
             </Link>
 
             {/* Desktop nav */}
-            <div className="hidden md:flex items-center gap-1">
-              {isAuthenticated && NAV_LINKS.map(link => (
-                <Link key={link.href} href={link.href}>
-                  <button onClick={(link as any).onClick} className={cn(
-                    "relative flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-medium transition-all",
-                    location === link.href
-                      ? "bg-primary/10 text-primary"
-                      : "text-muted-foreground hover:text-foreground hover:bg-secondary/60"
-                  )}>
-                    <link.icon className="w-4 h-4" />
-                    {link.label}
-                    {(link as any).badge > 0 && (
-                      <span className="absolute -top-1 -right-1 w-4.5 h-4.5 min-w-[1.1rem] px-1 bg-red-500 rounded-full text-[10px] font-bold text-white flex items-center justify-center leading-none">
-                        {(link as any).badge > 9 ? "9+" : (link as any).badge}
-                      </span>
-                    )}
-                  </button>
-                </Link>
-              ))}
+            <div className="hidden md:flex items-center gap-0.5">
+              {isAuthenticated && NAV_LINKS.map(link => {
+                const active = location === link.href;
+                return (
+                  <Link key={link.href} href={link.href}>
+                    <button
+                      onClick={(link as any).onClick}
+                      className={cn(
+                        "relative flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all",
+                        active
+                          ? "text-white shadow-md"
+                          : "text-foreground/80 hover:text-foreground hover:bg-[#25D366]/10"
+                      )}
+                      style={active ? { background: "linear-gradient(90deg,#075E54,#25D366)", boxShadow: "0 2px 12px rgba(37,211,102,0.3)" } : {}}
+                    >
+                      <link.icon className={cn("w-4 h-4", active ? "text-white" : "text-[#25D366]")} />
+                      {link.label}
+                      {(link as any).badge > 0 && (
+                        <span className="absolute -top-1 -right-1 min-w-[1.1rem] h-[1.1rem] px-1 bg-red-500 rounded-full text-[10px] font-bold text-white flex items-center justify-center leading-none">
+                          {(link as any).badge > 9 ? "9+" : (link as any).badge}
+                        </span>
+                      )}
+                    </button>
+                  </Link>
+                );
+              })}
             </div>
 
             {/* Right side */}
@@ -90,7 +97,7 @@ export function Navbar() {
                   "w-9 h-9 rounded-xl flex items-center justify-center border transition-all",
                   theme === "dark"
                     ? "bg-white/5 border-white/10 text-amber-300 hover:bg-white/10"
-                    : "bg-slate-100 border-slate-200 text-slate-500 hover:bg-slate-200"
+                    : "bg-slate-100 border-slate-200 text-slate-600 hover:bg-slate-200"
                 )}
                 aria-label="Toggle theme"
               >
@@ -101,16 +108,17 @@ export function Navbar() {
                 <>
                   <button
                     onClick={() => logout()}
-                    className="hidden md:flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-medium text-muted-foreground hover:text-red-400 hover:bg-red-400/5 transition-all"
+                    className="hidden md:flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-semibold text-foreground/70 hover:text-red-400 hover:bg-red-400/8 border border-transparent hover:border-red-400/20 transition-all"
                   >
                     <LogOut className="w-4 h-4" />
                     Logout
                   </button>
                   <button
                     onClick={() => setMobileOpen(!mobileOpen)}
-                    className="md:hidden w-9 h-9 rounded-xl flex items-center justify-center border border-border hover:bg-secondary/60 transition-all relative"
+                    className="md:hidden w-10 h-10 rounded-xl flex items-center justify-center border-2 border-[#25D366]/40 hover:border-[#25D366] hover:bg-[#25D366]/10 transition-all relative"
+                    style={{ color: "#25D366" }}
                   >
-                    {mobileOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
+                    {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
                     {showBadge && !mobileOpen && (
                       <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full text-[9px] font-bold text-white flex items-center justify-center">
                         {totalUnread > 9 ? "9+" : totalUnread}
