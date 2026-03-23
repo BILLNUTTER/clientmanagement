@@ -1058,7 +1058,30 @@ function SettingsForm() {
 
 // ── Golden Certificate PNG Export ─────────────────────────────
 async function exportAsPNG(rawRequests: any[]) {
-  const requests = [...rawRequests].sort((a, b) => {
+  // Priority per entry: Active (live sub) > Expired > Completed > In-Progress > Pending
+  const rowPriority = (r: any): number => {
+    const isExpired = r.subscriptionEndsAt && new Date(r.subscriptionEndsAt) < new Date();
+    const isActive  = (r.status === "in_progress" || r.status === "completed")
+                      && r.subscriptionEndsAt && !isExpired;
+    if (isActive)                          return 4; // live subscription
+    if (isExpired)                         return 3; // subscription lapsed
+    if (r.status === "completed")          return 2;
+    if (r.status === "in_progress")        return 1;
+    return 0;                                        // pending
+  };
+
+  // Deduplicate: one row per user, keep the highest-priority entry
+  const userMap = new Map<string, any>();
+  for (const req of rawRequests) {
+    const uid = (req.user?._id || req.user || String(req._id));
+    const existing = userMap.get(uid);
+    if (!existing || rowPriority(req) > rowPriority(existing)) {
+      userMap.set(uid, req);
+    }
+  }
+
+  // Sort A → Z by name
+  const requests = Array.from(userMap.values()).sort((a, b) => {
     const nameA = (a.user?.name || "").toLowerCase();
     const nameB = (b.user?.name || "").toLowerCase();
     return nameA < nameB ? -1 : nameA > nameB ? 1 : 0;
