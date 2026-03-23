@@ -1070,10 +1070,16 @@ async function exportAsPNG(rawRequests: any[]) {
     return 0;                                        // pending
   };
 
-  // Deduplicate: one row per user, keep the highest-priority entry
+  // Deduplicate: one row per user, keep the highest-priority entry.
+  // Use email as the key (always a plain unique string); fall back to _id string.
   const userMap = new Map<string, any>();
   for (const req of rawRequests) {
-    const uid = (req.user?._id || req.user || String(req._id));
+    const uid = String(
+      req.user?.email ||
+      req.user?._id  ||
+      req.user        ||
+      req._id
+    ).trim().toLowerCase();
     const existing = userMap.get(uid);
     if (!existing || rowPriority(req) > rowPriority(existing)) {
       userMap.set(uid, req);
