@@ -1,3 +1,44 @@
-<svg width="180" height="180" viewBox="0 0 180 180" fill="none" xmlns="http://www.w3.org/2000/svg">
-<rect width="180" height="180" rx="36" fill="#FF3C00"/>
+<svg width="256" height="256" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="256" y2="256" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#1A1200"/>
+      <stop offset="100%" stop-color="#0D0C08"/>
+    </linearGradient>
+    <linearGradient id="ringGrad" x1="0" y1="0" x2="256" y2="256" gradientUnits="userSpaceOnUse">
+      <stop offset="0%"   stop-color="#FFE566"/>
+      <stop offset="35%"  stop-color="#D4A017"/>
+      <stop offset="65%"  stop-color="#F5C518"/>
+      <stop offset="100%" stop-color="#FFE566"/>
+    </linearGradient>
+    <linearGradient id="nGrad" x1="128" y1="48" x2="128" y2="210" gradientUnits="userSpaceOnUse">
+      <stop offset="0%"   stop-color="#FFE566"/>
+      <stop offset="45%"  stop-color="#F5C518"/>
+      <stop offset="100%" stop-color="#D4A017"/>
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="6" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- Dark circular background -->
+  <circle cx="128" cy="128" r="124" fill="url(#bgGrad)"/>
+
+  <!-- Outer golden ring -->
+  <circle cx="128" cy="128" r="118" fill="none" stroke="url(#ringGrad)" stroke-width="6"/>
+
+  <!-- Inner thin ring accent -->
+  <circle cx="128" cy="128" r="108" fill="none" stroke="url(#ringGrad)" stroke-width="1.5" opacity="0.35"/>
+
+  <!-- Golden N — drawn as a path for crisp cross-platform rendering -->
+  <!-- Left vertical bar -->
+  <rect x="52" y="50" width="28" height="156" rx="5" fill="url(#nGrad)" filter="url(#glow)"/>
+  <!-- Right vertical bar -->
+  <rect x="176" y="50" width="28" height="156" rx="5" fill="url(#nGrad)" filter="url(#glow)"/>
+  <!-- Diagonal stroke of N -->
+  <polygon
+    points="52,50 80,50 204,206 176,206"
+    fill="url(#nGrad)"
+    filter="url(#glow)"
+  />
 </svg>

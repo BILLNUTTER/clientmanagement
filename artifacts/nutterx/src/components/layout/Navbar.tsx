@@ -48,8 +48,31 @@ export function Navbar() {
 
           {/* Logo */}
           <Link href={logoHref} className="flex items-center gap-2.5 group shrink-0">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-blue-500/20 group-hover:shadow-blue-500/40 transition-all">
-              <span className="font-display font-bold text-sm text-white">N</span>
+            <div className="w-9 h-9 shrink-0 group-hover:scale-105 transition-transform">
+              <svg viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-full drop-shadow-lg">
+                <defs>
+                  <linearGradient id="nb" x1="0" y1="0" x2="256" y2="256" gradientUnits="userSpaceOnUse">
+                    <stop offset="0%" stopColor="#1A1200"/>
+                    <stop offset="100%" stopColor="#0D0C08"/>
+                  </linearGradient>
+                  <linearGradient id="nr" x1="0" y1="0" x2="256" y2="256" gradientUnits="userSpaceOnUse">
+                    <stop offset="0%" stopColor="#FFE566"/>
+                    <stop offset="40%" stopColor="#D4A017"/>
+                    <stop offset="100%" stopColor="#FFE566"/>
+                  </linearGradient>
+                  <linearGradient id="nn" x1="128" y1="48" x2="128" y2="210" gradientUnits="userSpaceOnUse">
+                    <stop offset="0%" stopColor="#FFE566"/>
+                    <stop offset="50%" stopColor="#F5C518"/>
+                    <stop offset="100%" stopColor="#D4A017"/>
+                  </linearGradient>
+                </defs>
+                <circle cx="128" cy="128" r="124" fill="url(#nb)"/>
+                <circle cx="128" cy="128" r="118" fill="none" stroke="url(#nr)" strokeWidth="6"/>
+                <circle cx="128" cy="128" r="108" fill="none" stroke="url(#nr)" strokeWidth="1.5" opacity="0.35"/>
+                <rect x="52" y="50" width="28" height="156" rx="5" fill="url(#nn)"/>
+                <rect x="176" y="50" width="28" height="156" rx="5" fill="url(#nn)"/>
+                <polygon points="52,50 80,50 204,206 176,206" fill="url(#nn)"/>
+              </svg>
             </div>
             <span className="font-display font-bold text-base tracking-tight">
               Nutterx <span className="text-muted-foreground font-normal hidden sm:inline">Technologies</span>
