@@ -58,35 +58,6 @@ export function Navbar() {
               </span>
             </Link>
 
-            {/* Desktop nav */}
-            <div className="hidden md:flex items-center gap-0.5">
-              {isAuthenticated && NAV_LINKS.map(link => {
-                const active = location === link.href;
-                return (
-                  <Link key={link.href} href={link.href}>
-                    <button
-                      onClick={(link as any).onClick}
-                      className={cn(
-                        "relative flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all",
-                        active
-                          ? "text-white shadow-md"
-                          : "text-foreground/80 hover:text-foreground hover:bg-[#25D366]/10"
-                      )}
-                      style={active ? { background: "linear-gradient(90deg,#075E54,#25D366)", boxShadow: "0 2px 12px rgba(37,211,102,0.3)" } : {}}
-                    >
-                      <link.icon className={cn("w-4 h-4", active ? "text-white" : "text-[#25D366]")} />
-                      {link.label}
-                      {(link as any).badge > 0 && (
-                        <span className="absolute -top-1 -right-1 min-w-[1.1rem] h-[1.1rem] px-1 bg-red-500 rounded-full text-[10px] font-bold text-white flex items-center justify-center leading-none">
-                          {(link as any).badge > 9 ? "9+" : (link as any).badge}
-                        </span>
-                      )}
-                    </button>
-                  </Link>
-                );
-              })}
-            </div>
-
             {/* Right side */}
             <div className="flex items-center gap-2">
               <motion.button
