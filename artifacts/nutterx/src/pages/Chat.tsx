@@ -8,7 +8,7 @@ import {
 import { Input } from "@/components/ui/input";
 import {
   Send, CircleDot, MessageSquare, Headphones, ArrowLeft,
-  Users, Pin, Search, X, ExternalLink,
+  Users, Pin, Search, X, ExternalLink, Reply,
 } from "lucide-react";
 import { formatTime } from "@/lib/utils";
 import { cn } from "@/lib/utils";
@@ -98,6 +98,9 @@ export default function Chat() {
   const [search, setSearch]             = useState("");
   const [contactingAdmin, setContactingAdmin] = useState(false);
   const [previewUrl, setPreviewUrl]     = useState<string | null>(null);
+  const [replyTo, setReplyTo]           = useState<{ id: string; content: string; senderName: string } | null>(null);
+  const [swipeOffset, setSwipeOffset]   = useState<{ id: string; x: number } | null>(null);
+  const swipeMeta = useRef<{ id: string; startX: number } | null>(null);
 
   const { data: messages, isLoading: messagesLoading, refetch: refetchMessages } =
     useGetChatMessages(activeChatId || "", undefined, {
@@ -142,19 +145,45 @@ export default function Chat() {
   }, [socket, activeChatId, refetchMessages, refetchChats]);
 
   const openChat = (chatId: string) => { setActiveChatId(chatId); setScreen("chat"); };
-  const goBack   = () => { setScreen("list"); setActiveChatId(null); };
+  const goBack   = () => { setScreen("list"); setActiveChatId(null); setReplyTo(null); };
 
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!message.trim() || !activeChatId) return;
     const content = message;
+    const replyToId = replyTo?.id;
     setMessage("");
+    setReplyTo(null);
     try {
-      await sendMessageMutation.mutateAsync({ chatId: activeChatId, data: { content } });
+      await sendMessageMutation.mutateAsync({
+        chatId: activeChatId,
+        data: { content, replyToId } as any,
+      });
       refetchMessages();
     } catch {
       setMessage(content);
     }
+  };
+
+  const handleMsgTouchStart = (msgId: string, e: React.TouchEvent) => {
+    swipeMeta.current = { id: msgId, startX: e.touches[0]!.clientX };
+  };
+  const handleMsgTouchMove = (e: React.TouchEvent) => {
+    if (!swipeMeta.current) return;
+    const delta = Math.max(0, Math.min(72, e.touches[0]!.clientX - swipeMeta.current.startX));
+    setSwipeOffset({ id: swipeMeta.current.id, x: delta });
+  };
+  const handleMsgTouchEnd = (msg: any) => {
+    const offset = swipeOffset?.x ?? 0;
+    if (offset > 52) {
+      setReplyTo({
+        id: msg._id,
+        content: msg.content,
+        senderName: msg.sender?.name || "Unknown",
+      });
+    }
+    swipeMeta.current = null;
+    setSwipeOffset(null);
   };
 
   const handleStartChat = async (userId: string) => {
@@ -493,20 +522,43 @@ export default function Chat() {
                   <AnimatePresence initial={false}>
                     {messages.map((msg: any) => {
                       const isOwn = msg.sender?._id === user?._id;
+                      const msgSwipe = swipeOffset?.id === msg._id ? swipeOffset.x : 0;
+                      const isSwiping = swipeOffset?.id === msg._id;
                       return (
                         <motion.div
                           key={msg._id}
                           initial={{ opacity: 0, y: 6, scale: 0.97 }}
                           animate={{ opacity: 1, y: 0, scale: 1 }}
                           transition={{ duration: 0.16, type: "spring", stiffness: 340, damping: 30 }}
-                          className={cn("flex", isOwn ? "justify-end" : "justify-start")}
+                          className={cn("flex items-center gap-2 group", isOwn ? "justify-end" : "justify-start")}
+                          onTouchStart={e => handleMsgTouchStart(msg._id, e)}
+                          onTouchMove={handleMsgTouchMove}
+                          onTouchEnd={() => handleMsgTouchEnd(msg)}
                         >
-                          <div className={cn("max-w-[78%] flex flex-col", isOwn ? "items-end" : "items-start")}>
+                          {/* Swipe reply icon — left side for own, right side for others */}
+                          {isOwn && (
+                            <div
+                              className="shrink-0 flex items-center justify-center rounded-full transition-opacity"
+                              style={{
+                                width: 28, height: 28,
+                                background: "#25D366",
+                                opacity: Math.min(1, msgSwipe / 52),
+                                transform: `scale(${Math.min(1, msgSwipe / 52)})`,
+                              }}
+                            >
+                              <Reply className="w-3.5 h-3.5 text-white" />
+                            </div>
+                          )}
+
+                          <div
+                            className={cn("max-w-[78%] flex flex-col", isOwn ? "items-end" : "items-start")}
+                            style={{
+                              transform: `translateX(${isOwn ? -msgSwipe : msgSwipe}px)`,
+                              transition: isSwiping ? "none" : "transform 0.25s cubic-bezier(0.25,0.46,0.45,0.94)",
+                            }}
+                          >
                             {!isOwn && (
-                              <span
-                                className="text-xs mb-0.5 ml-3 font-semibold"
-                                style={{ color: "#075E54" }}
-                              >
+                              <span className="text-xs mb-0.5 ml-3 font-semibold" style={{ color: "#075E54" }}>
                                 {msg.sender?.name}
                               </span>
                             )}
@@ -515,20 +567,56 @@ export default function Chat() {
                               style={{
                                 background: isOwn ? "#DCF8C6" : "#FFFFFF",
                                 color: "#111",
-                                borderRadius: isOwn
-                                  ? "18px 18px 4px 18px"
-                                  : "18px 18px 18px 4px",
+                                borderRadius: isOwn ? "18px 18px 4px 18px" : "18px 18px 18px 4px",
                               }}
                             >
+                              {/* Reply quote */}
+                              {msg.replyTo && (
+                                <div
+                                  className="mb-1.5 px-2.5 py-1.5 rounded-lg text-xs border-l-[3px]"
+                                  style={{
+                                    borderColor: "#25D366",
+                                    background: isOwn ? "rgba(0,0,0,0.06)" : "rgba(0,0,0,0.05)",
+                                  }}
+                                >
+                                  <div className="font-semibold mb-0.5" style={{ color: "#075E54" }}>
+                                    {msg.replyTo.sender?.name}
+                                  </div>
+                                  <div className="opacity-70 truncate">{msg.replyTo.content}</div>
+                                </div>
+                              )}
                               {renderContent(msg.content, setPreviewUrl)}
                             </div>
-                            <span
-                              className="text-[10px] mt-0.5 px-1"
-                              style={{ color: "#667781" }}
-                            >
-                              {formatTime(msg.createdAt)}
-                            </span>
+                            <div className="flex items-center gap-2 mt-0.5 px-1">
+                              <span className="text-[10px]" style={{ color: "#667781" }}>
+                                {formatTime(msg.createdAt)}
+                              </span>
+                              {/* Desktop reply button (hover) */}
+                              <button
+                                onClick={() => setReplyTo({ id: msg._id, content: msg.content, senderName: msg.sender?.name || "Unknown" })}
+                                className="hidden group-hover:flex items-center justify-center w-5 h-5 rounded-full opacity-60 hover:opacity-100 transition-opacity"
+                                style={{ background: "rgba(0,0,0,0.12)" }}
+                                title="Reply"
+                              >
+                                <Reply className="w-3 h-3" style={{ color: "#667781" }} />
+                              </button>
+                            </div>
                           </div>
+
+                          {/* Swipe reply icon — right side for others */}
+                          {!isOwn && (
+                            <div
+                              className="shrink-0 flex items-center justify-center rounded-full"
+                              style={{
+                                width: 28, height: 28,
+                                background: "#25D366",
+                                opacity: Math.min(1, msgSwipe / 52),
+                                transform: `scale(${Math.min(1, msgSwipe / 52)})`,
+                              }}
+                            >
+                              <Reply className="w-3.5 h-3.5 text-white" />
+                            </div>
+                          )}
                         </motion.div>
                       );
                     })}
@@ -551,6 +639,38 @@ export default function Chat() {
                 )}
                 <div ref={messagesEndRef} />
               </div>
+
+              {/* Reply preview bar */}
+              <AnimatePresence>
+                {replyTo && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: "auto", opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.18 }}
+                    className="overflow-hidden shrink-0"
+                    style={{ background: "#F0F2F5" }}
+                  >
+                    <div className="flex items-center gap-3 px-4 py-2 border-t-2" style={{ borderColor: "#25D366" }}>
+                      <Reply className="w-4 h-4 shrink-0" style={{ color: "#25D366" }} />
+                      <div className="flex-1 min-w-0 border-l-2 pl-2" style={{ borderColor: "#25D366" }}>
+                        <div className="text-xs font-semibold truncate" style={{ color: "#075E54" }}>
+                          {replyTo.senderName}
+                        </div>
+                        <div className="text-xs truncate" style={{ color: "#667781" }}>
+                          {replyTo.content}
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => setReplyTo(null)}
+                        className="shrink-0 w-6 h-6 rounded-full flex items-center justify-center hover:bg-black/10 transition-colors"
+                      >
+                        <X className="w-3.5 h-3.5" style={{ color: "#667781" }} />
+                      </button>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
 
               {/* Input bar — WhatsApp style */}
               <div

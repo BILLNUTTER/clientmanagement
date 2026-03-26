@@ -46,6 +46,7 @@ export const messages = pgTable("messages", {
   senderId:  uuid("sender_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   content:   text("content").notNull(),
   read:      boolean("read").notNull().default(false),
+  replyToId: uuid("reply_to_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

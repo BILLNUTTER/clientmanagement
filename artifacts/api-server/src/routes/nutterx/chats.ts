@@ -134,8 +134,8 @@ router.get("/:chatId/messages", authenticate, async (req: AuthRequest, res: Resp
     if (!part) { res.status(404).json({ message: "Chat not found" }); return; }
 
     const msgs = await db.select({
-      id: messages.id, content: messages.content, read: messages.read, createdAt: messages.createdAt,
-      chatId: messages.chatId,
+      id: messages.id, content: messages.content, read: messages.read,
+      createdAt: messages.createdAt, chatId: messages.chatId, replyToId: messages.replyToId,
       sender: { id: users.id, name: users.name, email: users.email, avatar: users.avatar },
     }).from(messages)
       .innerJoin(users, eq(messages.senderId, users.id))
@@ -144,12 +144,31 @@ router.get("/:chatId/messages", authenticate, async (req: AuthRequest, res: Resp
     msgs.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     const paged = msgs.slice((page - 1) * limit, page * limit).reverse();
 
+    // Fetch reply-to messages in one batch
+    const replyToIds = paged.map(m => m.replyToId).filter(Boolean) as string[];
+    const replyMap: Record<string, any> = {};
+    if (replyToIds.length) {
+      const replyMsgs = await db.select({
+        id: messages.id, content: messages.content,
+        sender: { id: users.id, name: users.name },
+      }).from(messages)
+        .innerJoin(users, eq(messages.senderId, users.id))
+        .where(inArray(messages.id, replyToIds));
+      for (const r of replyMsgs) {
+        replyMap[r.id] = { _id: r.id, content: r.content, sender: { _id: r.sender.id, name: r.sender.name } };
+      }
+    }
+
     // Mark as read
     await db.update(messages)
       .set({ read: true })
       .where(and(eq(messages.chatId, chatId), ne(messages.senderId, userId), eq(messages.read, false)));
 
-    res.json(paged.map(m => ({ ...m, _id: m.id, sender: { ...m.sender, _id: m.sender.id } })));
+    res.json(paged.map(m => ({
+      ...m, _id: m.id,
+      sender: { ...m.sender, _id: m.sender.id },
+      replyTo: m.replyToId ? (replyMap[m.replyToId] ?? null) : null,
+    })));
   } catch {
     res.status(500).json({ message: "Failed to fetch messages" });
   }
@@ -160,7 +179,7 @@ router.post("/:chatId/messages", authenticate, async (req: AuthRequest, res: Res
     const db = getDb();
     const userId = req.user!.id;
     const chatId = req.params["chatId"]!;
-    const { content } = req.body;
+    const { content, replyToId } = req.body;
     if (!content?.trim()) { res.status(400).json({ message: "Content is required" }); return; }
 
     const [part] = await db.select().from(chatParticipants)
@@ -169,6 +188,7 @@ router.post("/:chatId/messages", authenticate, async (req: AuthRequest, res: Res
 
     const [msg] = await db.insert(messages).values({
       chatId, senderId: userId, content: content.trim(),
+      ...(replyToId ? { replyToId } : {}),
     }).returning();
 
     await db.update(chats).set({ lastMessageId: msg.id, updatedAt: new Date() })
