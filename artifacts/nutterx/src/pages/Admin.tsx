@@ -1694,8 +1694,12 @@ export default function Admin() {
   };
 
   useEffect(() => {
+    if (isAdmin) fetchGroups();
+  }, [isAdmin]);
+
+  useEffect(() => {
     if (activeTab === "groups" && isAdmin) fetchGroups();
-  }, [activeTab, isAdmin]);
+  }, [activeTab]);
 
   const { data: requests, isLoading: reqLoading } = useAdminGetRequests({ query: { queryKey: getAdminGetRequestsQueryKey(), enabled: isAdmin } });
   const { data: users, isLoading: usersLoading, refetch: refetchUsers } = useAdminGetUsers({ query: { queryKey: getAdminGetUsersQueryKey(), enabled: isAdmin } });
@@ -1856,7 +1860,7 @@ export default function Admin() {
                   <div className="flex justify-center py-16"><Loader2 className="w-7 h-7 animate-spin text-primary" /></div>
                 ) : (
                   <div className="space-y-2.5">
-                    {users?.map((u, i) => (
+                    {[...(users || [])].sort((a, b) => (a.name || "").localeCompare(b.name || "")).map((u, i) => (
                       <motion.div key={u._id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.04 }}
                         className="p-4 bg-secondary/30 rounded-xl border border-border flex items-center gap-3 hover:bg-secondary/50 transition-colors">
                         <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500/30 to-purple-600/30 border border-indigo-500/20 flex items-center justify-center font-bold text-base shrink-0 text-indigo-300">

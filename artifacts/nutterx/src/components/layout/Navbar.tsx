@@ -14,6 +14,7 @@ export function Navbar() {
   const [location] = useLocation();
 
   const isAdminPage = location === "/admin";
+  const isAdminUser = user?.role === "admin";
 
   const { data: chats } = useGetChats({ query: { queryKey: getGetChatsQueryKey(), enabled: isAuthenticated } });
   const totalUnread = chats
@@ -21,15 +22,16 @@ export function Navbar() {
     : 0;
   const showBadge = totalUnread > 0 && location !== "/chat";
 
-  const logoHref = isAdminPage ? "/admin" : isAuthenticated ? "/dashboard" : "/";
+  const dashboardHref = (isAdminPage || isAdminUser) ? "/admin" : "/dashboard";
+  const logoHref = (isAdminPage || isAdminUser) ? "/admin" : isAuthenticated ? "/dashboard" : "/";
 
   const NAV_LINKS = [
     { href: "/clients",   label: "Clients",   icon: Users },
     {
-      href:  isAdminPage ? "/admin" : "/dashboard",
+      href:  dashboardHref,
       label: "Dashboard",
       icon:  LayoutDashboard,
-      onClick: isAdminPage
+      onClick: (isAdminPage || isAdminUser)
         ? () => window.dispatchEvent(new CustomEvent("admin:reset"))
         : undefined,
     },
