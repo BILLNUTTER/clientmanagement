@@ -1,7 +1,8 @@
 import { createServer } from "http";
 import app from "./app";
 import { logger } from "./lib/logger";
-import { connectDB } from "./lib/db";
+import { initDb } from "./lib/db";
+import { runMigrations } from "./lib/migrate";
 import { initSocket } from "./socket";
 
 const rawPort = process.env["PORT"] ?? "10000";
@@ -16,15 +17,19 @@ const io = initSocket(httpServer);
 
 (app as any).io = io;
 
-connectDB()
-  .then(async () => {
-    const { seedData } = await import("./routes/nutterx/seed");
-    await seedData();
-    httpServer.listen(port, () => {
-      logger.info({ port }, "Server listening with Socket.io");
-    });
-  })
-  .catch((err) => {
-    logger.error({ err }, "Failed to connect to MongoDB, exiting");
-    process.exit(1);
+async function start() {
+  initDb();
+  await runMigrations();
+
+  const { seedData } = await import("./routes/nutterx/seed");
+  await seedData();
+
+  httpServer.listen(port, () => {
+    logger.info({ port }, "Server listening with Socket.io");
   });
+}
+
+start().catch((err) => {
+  logger.error({ err }, "Failed to start server");
+  process.exit(1);
+});

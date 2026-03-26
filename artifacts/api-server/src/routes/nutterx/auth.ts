@@ -1,49 +1,50 @@
 import { Router, Request, Response } from "express";
-import { User } from "../../models/User";
-import { Settings } from "../../models/Settings";
+import bcrypt from "bcryptjs";
+import { eq } from "drizzle-orm";
+import { getDb } from "../../lib/db";
+import { users, settings } from "../../schema";
 import { generateToken, authenticate, AuthRequest } from "../../middlewares/auth";
 
 const router = Router();
 
 router.post("/register", async (req: Request, res: Response): Promise<void> => {
   try {
-    const regSetting = await Settings.findOne({ key: "registration_enabled" });
+    const db = getDb();
+
+    const [regSetting] = await db.select().from(settings).where(eq(settings.key, "registration_enabled")).limit(1);
     if (regSetting && regSetting.value === "false") {
       res.status(403).json({ message: "New registrations are currently disabled. Please contact the admin." });
       return;
     }
 
     const { name, email, password } = req.body;
-
     if (!name || !email || !password) {
       res.status(400).json({ message: "Name, email, and password are required" });
       return;
     }
-
     if (password.length < 6) {
       res.status(400).json({ message: "Password must be at least 6 characters" });
       return;
     }
 
-    const exists = await User.findOne({ email: email.toLowerCase() });
-    if (exists) {
+    const [existing] = await db.select().from(users).where(eq(users.email, email.toLowerCase())).limit(1);
+    if (existing) {
       res.status(400).json({ message: "Email already in use" });
       return;
     }
 
-    const user = new User({ name, email, password });
-    await user.save();
+    const hashed = await bcrypt.hash(password, 12);
+    const [user] = await db.insert(users).values({
+      name,
+      email: email.toLowerCase(),
+      password: hashed,
+      role: "user",
+    }).returning();
 
-    const token = generateToken(user._id.toString());
+    const token = generateToken(user.id);
     res.status(201).json({
       token,
-      user: {
-        _id: user._id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        createdAt: user.createdAt,
-      },
+      user: { _id: user.id, name: user.name, email: user.email, role: user.role, createdAt: user.createdAt },
     });
   } catch (err) {
     res.status(500).json({ message: "Registration failed" });
@@ -52,50 +53,38 @@ router.post("/register", async (req: Request, res: Response): Promise<void> => {
 
 router.post("/login", async (req: Request, res: Response): Promise<void> => {
   try {
+    const db = getDb();
     const { email, password } = req.body;
-
     if (!email || !password) {
       res.status(400).json({ message: "Email and password are required" });
       return;
     }
 
-    const user = await User.findOne({ email: email.toLowerCase() });
+    const [user] = await db.select().from(users).where(eq(users.email, email.toLowerCase())).limit(1);
     if (!user) {
       res.status(401).json({ message: "Invalid email or password" });
       return;
     }
 
-    const isMatch = await user.comparePassword(password);
+    const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
       res.status(401).json({ message: "Invalid email or password" });
       return;
     }
 
-    const token = generateToken(user._id.toString());
+    const token = generateToken(user.id);
     res.json({
       token,
-      user: {
-        _id: user._id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        createdAt: user.createdAt,
-      },
+      user: { _id: user.id, name: user.name, email: user.email, role: user.role, createdAt: user.createdAt },
     });
-  } catch (err) {
+  } catch {
     res.status(500).json({ message: "Login failed" });
   }
 });
 
 router.get("/me", authenticate, async (req: AuthRequest, res: Response): Promise<void> => {
-  res.json({
-    _id: req.user!._id,
-    name: req.user!.name,
-    email: req.user!.email,
-    role: req.user!.role,
-    createdAt: req.user!.createdAt,
-    avatar: req.user!.avatar,
-  });
+  const u = req.user!;
+  res.json({ _id: u.id, name: u.name, email: u.email, role: u.role, createdAt: u.createdAt, avatar: u.avatar });
 });
 
 export default router;

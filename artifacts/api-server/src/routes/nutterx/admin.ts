@@ -1,9 +1,8 @@
 import { Router, Request, Response } from "express";
-import { User } from "../../models/User";
-import { ServiceRequest } from "../../models/ServiceRequest";
-import { DeadlinePayment } from "../../models/DeadlinePayment";
-import { Chat } from "../../models/Chat";
-import { Settings } from "../../models/Settings";
+import bcrypt from "bcryptjs";
+import { eq, ne, and, gt, inArray, sql } from "drizzle-orm";
+import { getDb } from "../../lib/db";
+import { users, serviceRequests, deadlinePayments, chats, chatParticipants, settings } from "../../schema";
 import { authenticate, requireAdmin, generateToken, AuthRequest } from "../../middlewares/auth";
 import { formatRequest } from "./requests";
 
@@ -12,306 +11,235 @@ const ADMIN_PASSWORD = "BILLnutter001002";
 
 const router = Router();
 
-// Admin verify (special login)
 router.post("/verify", async (req: Request, res: Response): Promise<void> => {
   const { username, password } = req.body;
   if (username !== ADMIN_USERNAME || password !== ADMIN_PASSWORD) {
-    res.status(401).json({ message: "Invalid admin credentials" });
-    return;
+    res.status(401).json({ message: "Invalid admin credentials" }); return;
   }
-  const admin = await User.findOne({ role: "admin" });
-  if (!admin) {
-    res.status(404).json({ message: "Admin account not found" });
-    return;
-  }
-  const token = generateToken(admin._id.toString());
-  res.json({
-    token,
-    user: { _id: admin._id, name: admin.name, email: admin.email, role: admin.role, createdAt: admin.createdAt },
-  });
+  const db = getDb();
+  const [admin] = await db.select().from(users).where(eq(users.role, "admin")).limit(1);
+  if (!admin) { res.status(404).json({ message: "Admin account not found" }); return; }
+  const token = generateToken(admin.id);
+  res.json({ token, user: { _id: admin.id, name: admin.name, email: admin.email, role: admin.role, createdAt: admin.createdAt } });
 });
 
-// Get all users
 router.get("/users", authenticate, requireAdmin, async (_req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const users = await User.find({ role: { $ne: "admin" } }).select("-password").sort({ createdAt: -1 });
-    res.json(users);
-  } catch {
-    res.status(500).json({ message: "Failed to fetch users" });
-  }
+    const db = getDb();
+    const rows = await db.select({ id: users.id, name: users.name, email: users.email, role: users.role, avatar: users.avatar, createdAt: users.createdAt })
+      .from(users).where(ne(users.role, "admin"));
+    rows.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    res.json(rows.map(r => ({ ...r, _id: r.id })));
+  } catch { res.status(500).json({ message: "Failed to fetch users" }); }
 });
 
-// Admin creates a user with name, email, password
 router.post("/users", authenticate, requireAdmin, async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { name, email, password } = req.body;
-    if (!name || !email || !password) {
-      res.status(400).json({ message: "Name, email, and password are required" });
-      return;
-    }
-    const exists = await User.findOne({ email: email.toLowerCase() });
-    if (exists) {
-      res.status(400).json({ message: "Email already in use" });
-      return;
-    }
-    const user = new User({ name, email: email.toLowerCase(), password });
-    await user.save();
-    res.status(201).json({ _id: user._id, name: user.name, email: user.email, role: user.role, createdAt: user.createdAt });
-  } catch {
-    res.status(500).json({ message: "Failed to create user" });
-  }
+    if (!name || !email || !password) { res.status(400).json({ message: "Name, email, and password are required" }); return; }
+    const db = getDb();
+    const [existing] = await db.select().from(users).where(eq(users.email, email.toLowerCase())).limit(1);
+    if (existing) { res.status(400).json({ message: "Email already in use" }); return; }
+    const hashed = await bcrypt.hash(password, 12);
+    const [row] = await db.insert(users).values({ name, email: email.toLowerCase(), password: hashed, role: "user" }).returning();
+    res.status(201).json({ _id: row.id, name: row.name, email: row.email, role: row.role, createdAt: row.createdAt });
+  } catch { res.status(500).json({ message: "Failed to create user" }); }
 });
 
-// Get all service requests
 router.get("/requests", authenticate, requireAdmin, async (_req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const requests = await ServiceRequest.find()
-      .populate("user", "name email")
-      .sort({ createdAt: -1 });
-    res.json(requests.map(formatRequest));
-  } catch {
-    res.status(500).json({ message: "Failed to fetch requests" });
-  }
+    const db = getDb();
+    const rows = await db.select().from(serviceRequests);
+    rows.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    const withUsers = await Promise.all(rows.map(async r => {
+      const [u] = await db.select({ id: users.id, name: users.name, email: users.email }).from(users).where(eq(users.id, r.userId)).limit(1);
+      return { ...r, user: u };
+    }));
+    res.json(withUsers.map(formatRequest));
+  } catch { res.status(500).json({ message: "Failed to fetch requests" }); }
 });
 
-// Update service request (status + deadline + payment)
 router.put("/requests/:id", authenticate, requireAdmin, async (req: AuthRequest, res: Response): Promise<void> => {
   try {
+    const db = getDb();
     const { status, adminNotes, subscriptionEndsAt, paymentRequired, paymentAmount } = req.body;
-
-    const update: Record<string, unknown> = {};
-    if (status !== undefined) update["status"] = status;
-    if (adminNotes !== undefined) update["adminNotes"] = adminNotes;
-    if (paymentRequired !== undefined) update["paymentRequired"] = paymentRequired;
-    if (paymentAmount !== undefined) update["paymentAmount"] = Number(paymentAmount);
-
-    if (subscriptionEndsAt) {
-      update["subscriptionEndsAt"] = new Date(subscriptionEndsAt);
-    }
-
+    const update: any = { updatedAt: new Date() };
+    if (status        !== undefined) update.status        = status;
+    if (adminNotes    !== undefined) update.adminNotes    = adminNotes;
+    if (paymentRequired !== undefined) update.paymentRequired = paymentRequired;
+    if (paymentAmount !== undefined) update.paymentAmount  = String(Number(paymentAmount));
+    if (subscriptionEndsAt) update.subscriptionEndsAt = new Date(subscriptionEndsAt);
     if (status === "completed" && !subscriptionEndsAt) {
-      update["completedAt"] = new Date();
-      update["subscriptionEndsAt"] = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+      update.completedAt = new Date();
+      update.subscriptionEndsAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
     }
 
-    const request = await ServiceRequest.findByIdAndUpdate(req.params["id"], update, { new: true })
-      .populate("user", "name email");
-
-    if (!request) {
-      res.status(404).json({ message: "Request not found" });
-      return;
-    }
-
-    res.json(formatRequest(request));
-  } catch {
-    res.status(500).json({ message: "Failed to update request" });
-  }
+    const [row] = await db.update(serviceRequests).set(update).where(eq(serviceRequests.id, req.params["id"]!)).returning();
+    if (!row) { res.status(404).json({ message: "Request not found" }); return; }
+    const [u] = await db.select({ id: users.id, name: users.name, email: users.email }).from(users).where(eq(users.id, row.userId)).limit(1);
+    res.json(formatRequest({ ...row, user: u }));
+  } catch { res.status(500).json({ message: "Failed to update request" }); }
 });
 
-// Get active subscriptions
 router.get("/subscriptions", authenticate, requireAdmin, async (_req: AuthRequest, res: Response): Promise<void> => {
   try {
+    const db = getDb();
     const now = new Date();
-    const requests = await ServiceRequest.find({
-      subscriptionEndsAt: { $exists: true, $gt: now },
-    })
-      .populate("user", "name email")
-      .sort({ subscriptionEndsAt: 1 });
+    const rows = await db.select().from(serviceRequests).where(gt(serviceRequests.subscriptionEndsAt, now));
+    rows.sort((a, b) => new Date(a.subscriptionEndsAt!).getTime() - new Date(b.subscriptionEndsAt!).getTime());
 
-    const subscriptions = requests.map((r) => {
+    const withUsers = await Promise.all(rows.map(async r => {
+      const [u] = await db.select({ id: users.id, name: users.name, email: users.email }).from(users).where(eq(users.id, r.userId)).limit(1);
       const msLeft = r.subscriptionEndsAt!.getTime() - now.getTime();
-      const daysRemaining = Math.max(0, Math.ceil(msLeft / (1000 * 60 * 60 * 24)));
       return {
-        _id: r._id,
-        user: r.user,
-        serviceName: r.serviceName,
-        status: r.status,
-        completedAt: r.completedAt,
-        subscriptionEndsAt: r.subscriptionEndsAt,
-        daysRemaining,
+        _id: r.id, user: u ? { ...u, _id: u.id } : null,
+        serviceName: r.serviceName, status: r.status,
+        completedAt: r.completedAt, subscriptionEndsAt: r.subscriptionEndsAt,
+        daysRemaining: Math.max(0, Math.ceil(msLeft / (1000 * 60 * 60 * 24))),
       };
-    });
-
-    res.json(subscriptions);
-  } catch {
-    res.status(500).json({ message: "Failed to fetch subscriptions" });
-  }
+    }));
+    res.json(withUsers);
+  } catch { res.status(500).json({ message: "Failed to fetch subscriptions" }); }
 });
 
-// Get all chats (admin)
 router.get("/chats", authenticate, requireAdmin, async (_req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const chats = await Chat.find()
-      .populate("participants", "name email avatar role")
-      .sort({ updatedAt: -1 });
-    res.json(chats);
-  } catch {
-    res.status(500).json({ message: "Failed to fetch chats" });
-  }
+    const db = getDb();
+    const chatRows = await db.select().from(chats);
+    chatRows.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+
+    const result = await Promise.all(chatRows.map(async chat => {
+      const parts = await db.select({ id: users.id, name: users.name, email: users.email, role: users.role, avatar: users.avatar })
+        .from(chatParticipants).innerJoin(users, eq(chatParticipants.userId, users.id))
+        .where(eq(chatParticipants.chatId, chat.id));
+      return { ...chat, _id: chat.id, participants: parts.map(p => ({ ...p, _id: p.id })) };
+    }));
+    res.json(result);
+  } catch { res.status(500).json({ message: "Failed to fetch chats" }); }
 });
 
-// Public clients data — all users with active service requests
 router.get("/clients", authenticate, async (_req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const requests = await ServiceRequest.find({
-      status: { $in: ["in_progress", "completed"] },
-    })
-      .populate("user", "name email")
-      .sort({ createdAt: -1 });
-
-    res.json(requests.map((r) => ({
-      _id: r._id,
-      user: r.user,
-      serviceName: r.serviceName,
-      status: r.status,
-      subscriptionEndsAt: r.subscriptionEndsAt,
-      completedAt: r.completedAt,
-      createdAt: r.createdAt,
-    })));
-  } catch {
-    res.status(500).json({ message: "Failed to fetch clients" });
-  }
+    const db = getDb();
+    const rows = await db.select().from(serviceRequests).where(inArray(serviceRequests.status, ["in_progress", "completed"]));
+    rows.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    const result = await Promise.all(rows.map(async r => {
+      const [u] = await db.select({ id: users.id, name: users.name, email: users.email }).from(users).where(eq(users.id, r.userId)).limit(1);
+      return { _id: r.id, user: u ? { ...u, _id: u.id } : null, serviceName: r.serviceName, status: r.status, subscriptionEndsAt: r.subscriptionEndsAt, completedAt: r.completedAt, createdAt: r.createdAt };
+    }));
+    res.json(result);
+  } catch { res.status(500).json({ message: "Failed to fetch clients" }); }
 });
 
-// Export users + service data as CSV
 router.get("/export", authenticate, requireAdmin, async (_req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const users = await User.find({ role: { $ne: "admin" } }).select("-password").sort({ createdAt: -1 });
-    const requests = await ServiceRequest.find().populate("user", "name email").sort({ createdAt: -1 });
+    const db = getDb();
+    const allUsers = await db.select({ id: users.id, name: users.name, email: users.email, createdAt: users.createdAt }).from(users).where(ne(users.role, "admin"));
+    const allRequests = await db.select().from(serviceRequests);
 
-    const lines: string[] = [
-      "Name,Email,Service,Status,Deadline,Days Remaining,Joined",
-    ];
-
-    for (const u of users) {
-      const userRequests = requests.filter(
-        (r) => r.user && (r.user as any)._id?.toString() === u._id.toString()
-      );
-
-      if (userRequests.length === 0) {
+    const lines = ["Name,Email,Service,Status,Deadline,Days Remaining,Joined"];
+    for (const u of allUsers) {
+      const userReqs = allRequests.filter(r => r.userId === u.id);
+      if (!userReqs.length) {
         lines.push(`"${u.name}","${u.email}","—","—","—","—","${u.createdAt.toISOString().split("T")[0]}"`);
       } else {
-        for (const r of userRequests) {
+        for (const r of userReqs) {
           const now = new Date();
-          const daysLeft = r.subscriptionEndsAt
-            ? Math.max(0, Math.ceil((r.subscriptionEndsAt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)))
-            : "—";
-          const deadline = r.subscriptionEndsAt ? r.subscriptionEndsAt.toISOString().split("T")[0] : "—";
-          lines.push(
-            `"${u.name}","${u.email}","${r.serviceName}","${r.status}","${deadline}","${daysLeft}","${u.createdAt.toISOString().split("T")[0]}"`
-          );
+          const daysLeft = r.subscriptionEndsAt ? Math.max(0, Math.ceil((new Date(r.subscriptionEndsAt).getTime() - now.getTime()) / (1000 * 60 * 60 * 24))) : "—";
+          const deadline = r.subscriptionEndsAt ? new Date(r.subscriptionEndsAt).toISOString().split("T")[0] : "—";
+          lines.push(`"${u.name}","${u.email}","${r.serviceName}","${r.status}","${deadline}","${daysLeft}","${u.createdAt.toISOString().split("T")[0]}"`);
         }
       }
     }
-
-    const csv = lines.join("\n");
     res.setHeader("Content-Type", "text/csv");
     res.setHeader("Content-Disposition", "attachment; filename=nutterx-clients.csv");
-    res.send(csv);
-  } catch {
-    res.status(500).json({ message: "Export failed" });
-  }
+    res.send(lines.join("\n"));
+  } catch { res.status(500).json({ message: "Export failed" }); }
 });
 
-// Delete a user
 router.delete("/users/:id", authenticate, requireAdmin, async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const user = await User.findById(req.params["id"]);
+    const db = getDb();
+    const [user] = await db.select().from(users).where(eq(users.id, req.params["id"]!)).limit(1);
     if (!user) { res.status(404).json({ message: "User not found" }); return; }
     if (user.role === "admin") { res.status(403).json({ message: "Cannot delete admin account" }); return; }
-    await User.findByIdAndDelete(req.params["id"]);
-    await ServiceRequest.deleteMany({ user: req.params["id"] });
+    await db.delete(serviceRequests).where(eq(serviceRequests.userId, req.params["id"]!));
+    await db.delete(users).where(eq(users.id, req.params["id"]!));
     res.json({ message: "User deleted" });
-  } catch {
-    res.status(500).json({ message: "Failed to delete user" });
-  }
+  } catch { res.status(500).json({ message: "Failed to delete user" }); }
 });
 
-// Payment statements (all requests with payment info)
 router.get("/payments", authenticate, requireAdmin, async (_req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const [requests, extensions] = await Promise.all([
-      ServiceRequest.find({ paymentRequired: true }).populate("user", "name email").sort({ createdAt: -1 }),
-      DeadlinePayment.find({ paymentStatus: "paid" }).populate("user", "name email").sort({ createdAt: -1 }),
+    const db = getDb();
+    const [reqRows, extRows] = await Promise.all([
+      db.select().from(serviceRequests).where(eq(serviceRequests.paymentRequired, true)),
+      db.select().from(deadlinePayments).where(eq(deadlinePayments.paymentStatus, "paid")),
     ]);
 
-    const serviceStatements = requests.map((r) => ({
-      _id: r._id,
-      user: r.user,
-      serviceName: r.serviceName,
-      paymentAmount: r.paymentAmount,
+    const reqsWithUsers = await Promise.all(reqRows.map(async r => {
+      const [u] = await db.select({ id: users.id, name: users.name, email: users.email }).from(users).where(eq(users.id, r.userId)).limit(1);
+      return { ...r, user: u ? { ...u, _id: u.id } : null };
+    }));
+    const extsWithUsers = await Promise.all(extRows.map(async e => {
+      const [u] = await db.select({ id: users.id, name: users.name, email: users.email }).from(users).where(eq(users.id, e.userId)).limit(1);
+      return { ...e, user: u ? { ...u, _id: u.id } : null };
+    }));
+
+    const serviceStatements = reqsWithUsers.map(r => ({
+      _id: r.id, user: r.user, serviceName: r.serviceName,
+      paymentAmount: r.paymentAmount ? Number(r.paymentAmount) : null,
       paymentCurrency: r.paymentCurrency || "KES",
-      paymentStatus: r.paymentStatus,
-      paymentRequired: r.paymentRequired,
-      pesapalOrderTrackingId: r.pesapalOrderTrackingId,
-      createdAt: r.createdAt,
-      type: "service",
-      purpose: null,
+      paymentStatus: r.paymentStatus, paymentRequired: r.paymentRequired,
+      pesapalOrderTrackingId: r.pesapalOrderTrackingId, createdAt: r.createdAt,
+      type: "service", purpose: null,
     }));
-
-    const extStatements = extensions.map((e) => ({
-      _id: e._id,
-      user: e.user,
-      serviceName: e.serviceName,
-      paymentAmount: e.amount,
+    const extStatements = extsWithUsers.map(e => ({
+      _id: e.id, user: e.user, serviceName: e.serviceName,
+      paymentAmount: e.amount ? Number(e.amount) : null,
       paymentCurrency: e.currency || "KES",
-      paymentStatus: e.paymentStatus,
-      paymentRequired: true,
-      pesapalOrderTrackingId: e.pesapalOrderTrackingId,
-      createdAt: e.createdAt,
-      type: "extension",
-      purpose: e.purpose,
+      paymentStatus: e.paymentStatus, paymentRequired: true,
+      pesapalOrderTrackingId: e.pesapalOrderTrackingId, createdAt: e.createdAt,
+      type: "extension", purpose: e.purpose,
     }));
 
-    // Merge and sort by date descending
     const statements = [...serviceStatements, ...extStatements].sort(
       (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     );
-
-    // Confirmed extension payments count toward revenue
-    const extRevenue = extensions.reduce((sum, e) => sum + (e.amount || 0), 0);
-    const baseRevenue = serviceStatements.filter(s => s.paymentStatus === "paid").reduce((sum, s) => sum + (s.paymentAmount || 0), 0);
-    const totalRevenue = baseRevenue + extRevenue;
-    const pendingAmount = serviceStatements.filter(s => s.paymentStatus === "unpaid" || s.paymentStatus === "pending").reduce((sum, s) => sum + (s.paymentAmount || 0), 0);
-
-    res.json({ statements, totalRevenue, pendingAmount, extensionRevenue: extRevenue, extensionCount: extensions.length });
-  } catch {
-    res.status(500).json({ message: "Failed to fetch payment statements" });
-  }
+    const extRevenue  = extsWithUsers.reduce((s, e) => s + Number(e.amount || 0), 0);
+    const baseRevenue = serviceStatements.filter(s => s.paymentStatus === "paid").reduce((s, r) => s + Number(r.paymentAmount || 0), 0);
+    const pendingAmount = serviceStatements.filter(s => s.paymentStatus === "unpaid" || s.paymentStatus === "pending").reduce((s, r) => s + Number(r.paymentAmount || 0), 0);
+    res.json({ statements, totalRevenue: baseRevenue + extRevenue, pendingAmount, extensionRevenue: extRevenue, extensionCount: extRows.length });
+  } catch { res.status(500).json({ message: "Failed to fetch payment statements" }); }
 });
 
-// Get admin settings
 router.get("/settings", authenticate, requireAdmin, async (_req: AuthRequest, res: Response): Promise<void> => {
   try {
+    const db = getDb();
     const keys = ["pesapal_consumer_key", "pesapal_consumer_secret", "pesapal_sandbox", "registration_enabled"];
-    const docs = await Settings.find({ key: { $in: keys } });
+    const docs = await db.select().from(settings).where(inArray(settings.key, keys));
     const result: Record<string, string> = {};
     for (const doc of docs) result[doc.key] = doc.value;
     if (result["registration_enabled"] === undefined) result["registration_enabled"] = "true";
     res.json(result);
-  } catch {
-    res.status(500).json({ message: "Failed to fetch settings" });
-  }
+  } catch { res.status(500).json({ message: "Failed to fetch settings" }); }
 });
 
-// Save admin settings
 router.put("/settings", authenticate, requireAdmin, async (req: AuthRequest, res: Response): Promise<void> => {
   try {
+    const db = getDb();
     const { pesapal_consumer_key, pesapal_consumer_secret, pesapal_sandbox, registration_enabled } = req.body;
-    const ops = [];
-    if (pesapal_consumer_key !== undefined)
-      ops.push(Settings.findOneAndUpdate({ key: "pesapal_consumer_key" }, { value: pesapal_consumer_key }, { upsert: true, new: true }));
-    if (pesapal_consumer_secret !== undefined)
-      ops.push(Settings.findOneAndUpdate({ key: "pesapal_consumer_secret" }, { value: pesapal_consumer_secret }, { upsert: true, new: true }));
-    if (pesapal_sandbox !== undefined)
-      ops.push(Settings.findOneAndUpdate({ key: "pesapal_sandbox" }, { value: String(pesapal_sandbox) }, { upsert: true, new: true }));
-    if (registration_enabled !== undefined)
-      ops.push(Settings.findOneAndUpdate({ key: "registration_enabled" }, { value: String(registration_enabled) }, { upsert: true, new: true }));
-    await Promise.all(ops);
+    const pairs: Array<[string, string]> = [];
+    if (pesapal_consumer_key  !== undefined) pairs.push(["pesapal_consumer_key",    String(pesapal_consumer_key)]);
+    if (pesapal_consumer_secret !== undefined) pairs.push(["pesapal_consumer_secret", String(pesapal_consumer_secret)]);
+    if (pesapal_sandbox       !== undefined) pairs.push(["pesapal_sandbox",           String(pesapal_sandbox)]);
+    if (registration_enabled  !== undefined) pairs.push(["registration_enabled",      String(registration_enabled)]);
+    for (const [key, value] of pairs) {
+      await db.insert(settings).values({ key, value, updatedAt: new Date() })
+        .onConflictDoUpdate({ target: settings.key, set: { value, updatedAt: new Date() } });
+    }
     res.json({ message: "Settings saved" });
-  } catch {
-    res.status(500).json({ message: "Failed to save settings" });
-  }
+  } catch { res.status(500).json({ message: "Failed to save settings" }); }
 });
 
 export default router;

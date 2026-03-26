@@ -1,22 +1,20 @@
-import mongoose from "mongoose";
+import postgres from "postgres";
+import { drizzle } from "drizzle-orm/postgres-js";
 import { logger } from "./logger";
 
-let isConnected = false;
+let _db: ReturnType<typeof drizzle> | null = null;
+let _sql: ReturnType<typeof postgres> | null = null;
 
-export async function connectDB(): Promise<void> {
-  if (isConnected) return;
+export function initDb(): void {
+  if (_db) return;
+  const url = process.env["POSTGRES_URL"];
+  if (!url) throw new Error("POSTGRES_URL environment variable is required");
+  _sql = postgres(url, { max: 10, idle_timeout: 20, connect_timeout: 10 });
+  _db = drizzle(_sql);
+  logger.info("PostgreSQL (Supabase) client initialized");
+}
 
-  const uri = process.env["MONGODB_URI"];
-  if (!uri) {
-    throw new Error("MONGODB_URI environment variable is required");
-  }
-
-  try {
-    await mongoose.connect(uri);
-    isConnected = true;
-    logger.info("MongoDB connected successfully");
-  } catch (err) {
-    logger.error({ err }, "MongoDB connection failed");
-    throw err;
-  }
+export function getDb(): ReturnType<typeof drizzle> {
+  if (!_db) initDb();
+  return _db!;
 }

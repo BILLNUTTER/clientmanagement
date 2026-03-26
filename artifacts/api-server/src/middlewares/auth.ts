@@ -1,6 +1,9 @@
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
-import { User, IUser } from "../models/User";
+import { getDb } from "../lib/db";
+import { users } from "../schema";
+import { eq } from "drizzle-orm";
+import type { IUser } from "../models/User";
 
 export interface AuthRequest extends Request {
   user?: IUser;
@@ -26,12 +29,13 @@ export async function authenticate(
   const token = authHeader.slice(7);
   try {
     const decoded = jwt.verify(token, JWT_SECRET) as { id: string };
-    const user = await User.findById(decoded.id).select("-password");
-    if (!user) {
+    const db = getDb();
+    const [row] = await db.select().from(users).where(eq(users.id, decoded.id)).limit(1);
+    if (!row) {
       res.status(401).json({ message: "User not found" });
       return;
     }
-    req.user = user;
+    req.user = { ...row, _id: row.id };
     next();
   } catch {
     res.status(401).json({ message: "Invalid or expired token" });

@@ -1,15 +1,20 @@
 import { Router, Response } from "express";
-import { User } from "../../models/User";
+import { ne, eq } from "drizzle-orm";
+import { getDb } from "../../lib/db";
+import { users } from "../../schema";
 import { authenticate, AuthRequest } from "../../middlewares/auth";
 
 const router = Router();
 
 router.get("/", authenticate, async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const users = await User.find({ _id: { $ne: req.user!._id } })
-      .select("-password")
-      .sort({ role: -1, name: 1 });
-    res.json(users);
+    const db = getDb();
+    const rows = await db.select({
+      id: users.id, name: users.name, email: users.email,
+      role: users.role, avatar: users.avatar, createdAt: users.createdAt,
+    }).from(users).where(ne(users.id, req.user!.id));
+
+    res.json(rows.map(r => ({ ...r, _id: r.id })));
   } catch {
     res.status(500).json({ message: "Failed to fetch users" });
   }
@@ -17,12 +22,13 @@ router.get("/", authenticate, async (req: AuthRequest, res: Response): Promise<v
 
 router.get("/:id", authenticate, async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const user = await User.findById(req.params["id"]).select("-password");
-    if (!user) {
-      res.status(404).json({ message: "User not found" });
-      return;
-    }
-    res.json(user);
+    const db = getDb();
+    const [row] = await db.select({
+      id: users.id, name: users.name, email: users.email,
+      role: users.role, avatar: users.avatar, createdAt: users.createdAt,
+    }).from(users).where(eq(users.id, req.params["id"]!)).limit(1);
+    if (!row) { res.status(404).json({ message: "User not found" }); return; }
+    res.json({ ...row, _id: row.id });
   } catch {
     res.status(500).json({ message: "Failed to fetch user" });
   }
