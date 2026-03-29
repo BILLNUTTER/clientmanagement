@@ -1079,23 +1079,42 @@ export default function Chat() {
                                         </div>
                                       </div>
                                     </div>
+                                  ) : isOwn ? (
+                                    /* Sender: non-tappable indicator */
+                                    <div className="flex items-center gap-2.5 py-0.5 select-none">
+                                      <div
+                                        className="w-9 h-9 rounded-full flex items-center justify-center shrink-0"
+                                        style={{ background: "rgba(0,0,0,0.10)" }}
+                                      >
+                                        <Camera className="w-4 h-4" style={{ color: "#075E54" }} />
+                                      </div>
+                                      <div className="text-left">
+                                        <div className="text-xs font-semibold" style={{ color: "#075E54" }}>
+                                          Photo · View once
+                                        </div>
+                                        <div className="text-[10px]" style={{ color: "#667781" }}>
+                                          Sent
+                                        </div>
+                                      </div>
+                                    </div>
                                   ) : (
+                                    /* Recipient: tappable */
                                     <button
-                                      onClick={() => handleViewOnce(msg.content, isOwn)}
+                                      onClick={() => handleViewOnce(msg.content, false)}
                                       className="flex items-center gap-2.5 py-0.5 select-none"
                                     >
                                       <div
                                         className="w-9 h-9 rounded-full flex items-center justify-center shrink-0"
-                                        style={{ background: isOwn ? "rgba(0,0,0,0.12)" : "rgba(7,94,84,0.12)" }}
+                                        style={{ background: "rgba(7,94,84,0.12)" }}
                                       >
                                         <Eye className="w-4 h-4" style={{ color: "#075E54" }} />
                                       </div>
                                       <div className="text-left">
                                         <div className="text-xs font-semibold" style={{ color: "#075E54" }}>
-                                          {isOwn ? "Photo · View once" : "Photo · Tap to view"}
+                                          Photo · Tap to view
                                         </div>
                                         <div className="text-[10px]" style={{ color: "#667781" }}>
-                                          {isOwn ? "Sent" : "Once viewed, it's gone"}
+                                          Once viewed, it's gone
                                         </div>
                                       </div>
                                     </button>
