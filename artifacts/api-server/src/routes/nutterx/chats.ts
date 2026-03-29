@@ -19,6 +19,7 @@ async function buildChatResponse(db: ReturnType<typeof getDb>, chatRows: any[], 
     if (chat.lastMessageId) {
       const [lm] = await db.select({
         id: messages.id, content: messages.content, createdAt: messages.createdAt,
+        type: messages.type,
         sender: { id: users.id, name: users.name },
       }).from(messages)
         .innerJoin(users, eq(messages.senderId, users.id))

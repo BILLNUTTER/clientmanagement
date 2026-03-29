@@ -1,14 +1,15 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { useSocket } from "@/hooks/use-socket";
 import {
   useGetChats, useGetChatMessages, useSendMessage, useStartDirectChat,
-  getGetChatsQueryKey, getGetChatMessagesQueryKey,
+  getGetChatsQueryKey, getGetChatMessagesQueryKey, getGetMeQueryKey,
 } from "@workspace/api-client-react";
 import { Input } from "@/components/ui/input";
 import {
   Send, CircleDot, MessageSquare, Headphones, ArrowLeft,
-  Users, Pin, Search, X, ExternalLink, Reply, Camera, Eye, EyeOff,
+  Users, Pin, Search, X, ExternalLink, Reply, Camera, Eye, EyeOff, UserCircle,
 } from "lucide-react";
 import { formatTime } from "@/lib/utils";
 import { cn } from "@/lib/utils";
@@ -310,6 +311,7 @@ function ViewOnceFullscreen({ imageData, mimeType, caption, isSender, onClose }:
 /* ── Main Chat component ───────────────────────────────────── */
 export default function Chat() {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   const { socket, isConnected, onlineUsers } = useSocket();
   const { data: chats, isLoading: chatsLoading, refetch: refetchChats } = useGetChats();
   const [allUsers, setAllUsers]         = useState<any[]>([]);
@@ -327,6 +329,9 @@ export default function Chat() {
   const [viewOnceFs, setViewOnceFs] = useState<{ imageData: string | null; mimeType: string; caption?: string | null; isSender: boolean } | null>(null);
   const [sendingViewOnce, setSendingViewOnce] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [profileModal, setProfileModal] = useState(false);
+  const [profileUrlInput, setProfileUrlInput] = useState("");
+  const [savingProfile, setSavingProfile] = useState(false);
 
   const { data: messages, isLoading: messagesLoading, refetch: refetchMessages } =
     useGetChatMessages(activeChatId || "", undefined, {
@@ -515,6 +520,25 @@ export default function Chat() {
     } catch {}
   };
 
+  const handleSaveProfile = async () => {
+    setSavingProfile(true);
+    try {
+      const token = localStorage.getItem("nutterx_token");
+      const res = await fetch("/api/users/me", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ avatar: profileUrlInput.trim() }),
+      });
+      if (!res.ok) throw new Error("Failed");
+      queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
+      setProfileModal(false);
+    } catch {
+      alert("Could not save profile photo.");
+    } finally {
+      setSavingProfile(false);
+    }
+  };
+
   const handleContactAdmin = async () => {
     const existing = chats?.find(c =>
       c.type === "direct" && c.participants?.some((p: any) => p.role === "admin")
@@ -634,13 +658,89 @@ export default function Chat() {
               transition={{ duration: 0.16, ease: "easeInOut" }}
               className="absolute inset-0 flex flex-col bg-background"
             >
+              {/* Profile photo modal */}
+              <AnimatePresence>
+                {profileModal && (
+                  <motion.div
+                    initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                    className="absolute inset-0 z-[300] flex items-end justify-center"
+                    style={{ background: "rgba(0,0,0,0.6)" }}
+                    onClick={() => setProfileModal(false)}
+                  >
+                    <motion.div
+                      initial={{ y: 80, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 80, opacity: 0 }}
+                      transition={{ duration: 0.22, ease: "easeOut" }}
+                      onClick={e => e.stopPropagation()}
+                      className="w-full rounded-t-3xl p-6 flex flex-col gap-4"
+                      style={{ background: "var(--background, #fff)" }}
+                    >
+                      <div className="flex items-center gap-4">
+                        <div className="w-16 h-16 rounded-full overflow-hidden shrink-0 border-2 border-[#25D366] flex items-center justify-center"
+                          style={{ background: "linear-gradient(135deg,#128C7E,#25D366)" }}>
+                          {profileUrlInput ? (
+                            <img src={profileUrlInput} alt="preview" className="w-full h-full object-cover"
+                              onError={e => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
+                          ) : (user as any)?.avatar ? (
+                            <img src={(user as any).avatar} alt={user?.name} className="w-full h-full object-cover" />
+                          ) : (
+                            <span className="text-white text-2xl font-bold">{user?.name?.charAt(0).toUpperCase()}</span>
+                          )}
+                        </div>
+                        <div>
+                          <p className="font-bold text-base">{user?.name}</p>
+                          <p className="text-xs text-muted-foreground">{user?.email}</p>
+                        </div>
+                      </div>
+                      <div>
+                        <p className="text-xs font-semibold text-muted-foreground mb-1.5 uppercase tracking-wide">Profile photo URL</p>
+                        <input
+                          type="url"
+                          value={profileUrlInput}
+                          onChange={e => setProfileUrlInput(e.target.value)}
+                          onKeyDown={e => { if (e.key === "Enter") handleSaveProfile(); }}
+                          placeholder="Paste image URL here…"
+                          style={{ fontSize: 16 }}
+                          className="w-full border border-border rounded-xl px-4 py-3 text-sm outline-none focus:border-[#25D366] transition-colors bg-background"
+                        />
+                      </div>
+                      <div className="flex gap-3">
+                        <button onClick={() => setProfileModal(false)}
+                          className="flex-1 py-3 rounded-xl border border-border text-sm font-semibold">
+                          Cancel
+                        </button>
+                        <button onClick={handleSaveProfile} disabled={savingProfile}
+                          className="flex-1 py-3 rounded-xl text-white text-sm font-bold disabled:opacity-60"
+                          style={{ background: "#25D366" }}>
+                          {savingProfile ? "Saving…" : "Save"}
+                        </button>
+                      </div>
+                    </motion.div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
               {/* List Header */}
               <div
                 className="px-4 pt-4 pb-3 shrink-0 shadow-md"
                 style={{ background: "#075E54" }}
               >
                 <div className="flex items-center justify-between mb-3">
-                  <h1 className="text-xl font-bold text-white tracking-tight">Messages</h1>
+                  <div className="flex items-center gap-2.5">
+                    <button
+                      onClick={() => { setProfileUrlInput((user as any)?.avatar || ""); setProfileModal(true); }}
+                      className="w-8 h-8 rounded-full overflow-hidden shrink-0 border-2 border-white/40 flex items-center justify-center"
+                      style={{ background: "rgba(255,255,255,0.15)" }}
+                      title="Set profile photo"
+                    >
+                      {(user as any)?.avatar ? (
+                        <img src={(user as any).avatar} alt={user?.name} className="w-full h-full object-cover"
+                          onError={e => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
+                      ) : (
+                        <span className="text-white text-xs font-bold">{user?.name?.charAt(0).toUpperCase()}</span>
+                      )}
+                    </button>
+                    <h1 className="text-xl font-bold text-white tracking-tight">Messages</h1>
+                  </div>
                   <div className={cn(
                     "flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full",
                     isConnected
@@ -682,7 +782,12 @@ export default function Chat() {
                           const otherId = getChatOtherId(chat);
                           const online  = isOnline(otherId);
                           const pinned  = isAdminChat(chat) && user?.role !== "admin";
-                          const lastMsg = (chat as any).lastMessage?.content || getChatSubtitle(chat);
+                          const lm = (chat as any).lastMessage;
+                          const lastMsg = lm
+                            ? lm.type === "view_once_image"
+                              ? "📷 View once photo"
+                              : lm.content || getChatSubtitle(chat)
+                            : getChatSubtitle(chat);
                           return (
                             <motion.button
                               key={chat._id}
@@ -702,7 +807,13 @@ export default function Chat() {
                                         onError={e => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
                                     : chat.type === "group"
                                     ? <Users className="w-5 h-5" />
-                                    : getChatAvatar(chat)}
+                                    : (() => {
+                                        const other = chat.participants?.find((p: any) => p._id !== user?._id);
+                                        return other?.avatar
+                                          ? <img src={other.avatar} alt={other.name} className="w-full h-full object-cover"
+                                              onError={e => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
+                                          : getChatAvatar(chat);
+                                      })()}
                                 </div>
                                 {online && (
                                   <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-[#25D366] border-2 border-background rounded-full" />
@@ -759,10 +870,13 @@ export default function Chat() {
                       >
                         <div className="relative shrink-0">
                           <div
-                            className="w-11 h-11 rounded-full flex items-center justify-center font-bold text-sm text-white"
+                            className="w-11 h-11 rounded-full flex items-center justify-center font-bold text-sm text-white overflow-hidden"
                             style={{ background: "linear-gradient(135deg,#128C7E,#25D366)" }}
                           >
-                            {u.name?.charAt(0).toUpperCase()}
+                            {u.avatar
+                              ? <img src={u.avatar} alt={u.name} className="w-full h-full object-cover"
+                                  onError={e => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
+                              : u.name?.charAt(0).toUpperCase()}
                           </div>
                           {isOnline(u._id) && (
                             <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-[#25D366] border-2 border-background rounded-full" />
