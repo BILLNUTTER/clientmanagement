@@ -8,7 +8,7 @@ import {
 import { Input } from "@/components/ui/input";
 import {
   Send, CircleDot, MessageSquare, Headphones, ArrowLeft,
-  Users, Pin, Search, X, ExternalLink, Reply,
+  Users, Pin, Search, X, ExternalLink, Reply, Camera, Eye, EyeOff,
 } from "lucide-react";
 import { formatTime } from "@/lib/utils";
 import { cn } from "@/lib/utils";
@@ -86,6 +86,208 @@ function LinkModal({ url, onClose }: { url: string; onClose: () => void }) {
   );
 }
 
+type DragMode = "move" | "tl" | "tr" | "bl" | "br";
+type CropState = { x: number; y: number; w: number; h: number };
+
+/* ── Crop Modal ─────────────────────────────────────────────── */
+function CropModal({ objectUrl, onSend, onCancel }: {
+  objectUrl: string;
+  onSend: (base64: string, mimeType: string) => void;
+  onCancel: () => void;
+}) {
+  const imgRef = useRef<HTMLImageElement>(null);
+  const [nat, setNat]   = useState({ w: 0, h: 0 });
+  const [disp, setDisp] = useState({ w: 0, h: 0 });
+  const [crop, setCrop] = useState<CropState>({ x: 0.1, y: 0.1, w: 0.8, h: 0.8 });
+  const drag = useRef<{ mode: DragMode; sx: number; sy: number; sc: CropState } | null>(null);
+
+  const onImgLoad = () => {
+    if (!imgRef.current) return;
+    setNat({ w: imgRef.current.naturalWidth, h: imgRef.current.naturalHeight });
+    setDisp({ w: imgRef.current.clientWidth, h: imgRef.current.clientHeight });
+  };
+
+  const onMove = useCallback((e: MouseEvent | TouchEvent) => {
+    if (!drag.current || !disp.w) return;
+    const pt = "touches" in e ? e.touches[0]! : e;
+    const dx = (pt.clientX - drag.current.sx) / disp.w;
+    const dy = (pt.clientY - drag.current.sy) / disp.h;
+    const sc = drag.current.sc;
+    const MIN = 0.12;
+    let { x, y, w, h } = sc;
+    switch (drag.current.mode) {
+      case "move":
+        x = Math.max(0, Math.min(1 - w, sc.x + dx));
+        y = Math.max(0, Math.min(1 - h, sc.y + dy));
+        break;
+      case "br":
+        w = Math.max(MIN, Math.min(1 - sc.x, sc.w + dx));
+        h = Math.max(MIN, Math.min(1 - sc.y, sc.h + dy));
+        break;
+      case "bl": {
+        const nw = Math.max(MIN, Math.min(sc.x + sc.w, sc.w - dx));
+        x = sc.x + (sc.w - nw); w = nw;
+        h = Math.max(MIN, Math.min(1 - sc.y, sc.h + dy));
+        break;
+      }
+      case "tr": {
+        w = Math.max(MIN, Math.min(1 - sc.x, sc.w + dx));
+        const nh = Math.max(MIN, Math.min(sc.y + sc.h, sc.h - dy));
+        y = sc.y + (sc.h - nh); h = nh;
+        break;
+      }
+      case "tl": {
+        const nw = Math.max(MIN, Math.min(sc.x + sc.w, sc.w - dx));
+        x = sc.x + (sc.w - nw); w = nw;
+        const nh = Math.max(MIN, Math.min(sc.y + sc.h, sc.h - dy));
+        y = sc.y + (sc.h - nh); h = nh;
+        break;
+      }
+    }
+    setCrop({ x, y, w, h });
+  }, [disp]);
+
+  const onUp = useCallback(() => { drag.current = null; }, []);
+
+  useEffect(() => {
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("touchmove", onMove, { passive: false });
+    window.addEventListener("mouseup", onUp);
+    window.addEventListener("touchend", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("touchmove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      window.removeEventListener("touchend", onUp);
+    };
+  }, [onMove, onUp]);
+
+  const startDrag = (mode: DragMode, e: React.MouseEvent | React.TouchEvent) => {
+    const pt = "touches" in e ? e.touches[0]! : e;
+    drag.current = { mode, sx: pt.clientX, sy: pt.clientY, sc: { ...crop } };
+    e.preventDefault(); e.stopPropagation();
+  };
+
+  const handleSend = () => {
+    if (!imgRef.current || !nat.w) return;
+    const canvas = document.createElement("canvas");
+    const sx = Math.round(crop.x * nat.w), sy = Math.round(crop.y * nat.h);
+    const sw = Math.round(crop.w * nat.w), sh = Math.round(crop.h * nat.h);
+    canvas.width = sw; canvas.height = sh;
+    canvas.getContext("2d")!.drawImage(imgRef.current, sx, sy, sw, sh, 0, 0, sw, sh);
+    onSend(canvas.toDataURL("image/jpeg", 0.85).split(",")[1]!, "image/jpeg");
+  };
+
+  const corners: { mode: DragMode; style: React.CSSProperties }[] = [
+    { mode: "tl", style: { top: -8, left: -8, cursor: "nw-resize" } },
+    { mode: "tr", style: { top: -8, right: -8, cursor: "ne-resize" } },
+    { mode: "bl", style: { bottom: -8, left: -8, cursor: "sw-resize" } },
+    { mode: "br", style: { bottom: -8, right: -8, cursor: "se-resize" } },
+  ];
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      className="fixed inset-0 z-[400] flex flex-col select-none"
+      style={{ background: "rgba(0,0,0,0.95)" }}
+    >
+      <div className="flex items-center justify-between px-4 h-14 shrink-0" style={{ background: "#075E54" }}>
+        <button onClick={onCancel} className="text-white p-1"><X className="w-5 h-5" /></button>
+        <span className="text-white font-semibold text-sm">Drag corners to crop</span>
+        <div className="w-7" />
+      </div>
+
+      <div className="flex-1 flex items-center justify-center overflow-hidden p-6">
+        <div className="relative inline-block">
+          <img ref={imgRef} src={objectUrl} onLoad={onImgLoad}
+            className="block max-w-full max-h-[60vh] object-contain select-none"
+            draggable={false} alt="crop preview" />
+
+          {disp.w > 0 && (
+            <>
+              <div className="absolute pointer-events-none" style={{ inset: 0, top: 0, height: `${crop.y * 100}%`, background: "rgba(0,0,0,0.62)" }} />
+              <div className="absolute pointer-events-none" style={{ inset: 0, top: `${(crop.y + crop.h) * 100}%`, height: `${(1 - crop.y - crop.h) * 100}%`, background: "rgba(0,0,0,0.62)" }} />
+              <div className="absolute pointer-events-none" style={{ top: `${crop.y * 100}%`, left: 0, width: `${crop.x * 100}%`, height: `${crop.h * 100}%`, background: "rgba(0,0,0,0.62)" }} />
+              <div className="absolute pointer-events-none" style={{ top: `${crop.y * 100}%`, left: `${(crop.x + crop.w) * 100}%`, right: 0, height: `${crop.h * 100}%`, background: "rgba(0,0,0,0.62)" }} />
+            </>
+          )}
+
+          <div
+            className="absolute border-2 border-white cursor-move"
+            style={{ left: `${crop.x * 100}%`, top: `${crop.y * 100}%`, width: `${crop.w * 100}%`, height: `${crop.h * 100}%` }}
+            onMouseDown={e => startDrag("move", e)}
+            onTouchStart={e => startDrag("move", e)}
+          >
+            <div className="absolute inset-0 pointer-events-none" style={{
+              backgroundImage: "linear-gradient(rgba(255,255,255,0.2) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.2) 1px, transparent 1px)",
+              backgroundSize: "33.33% 33.33%",
+            }} />
+            {corners.map(({ mode, style }) => (
+              <div key={mode} className="absolute w-5 h-5 bg-white rounded-sm z-10"
+                style={style}
+                onMouseDown={e => startDrag(mode, e)}
+                onTouchStart={e => startDrag(mode, e)}
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="flex items-center justify-between px-6 py-4 shrink-0" style={{ background: "#111" }}>
+        <button onClick={onCancel} className="text-white/60 text-sm font-medium">Cancel</button>
+        <button onClick={handleSend}
+          className="flex items-center gap-2 px-7 py-2.5 rounded-full text-white font-bold text-sm"
+          style={{ background: "#25D366" }}
+        >
+          <Send className="w-4 h-4" />Send
+        </button>
+      </div>
+    </motion.div>
+  );
+}
+
+/* ── View-Once Fullscreen ───────────────────────────────────── */
+function ViewOnceFullscreen({ imageData, mimeType, isSender, onClose }: {
+  imageData: string | null;
+  mimeType: string;
+  isSender: boolean;
+  onClose: () => void;
+}) {
+  const src = imageData ? `data:${mimeType};base64,${imageData}` : null;
+  return (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.97 }} transition={{ duration: 0.18 }}
+      className="fixed inset-0 z-[400] flex flex-col"
+      style={{ background: "rgba(0,0,0,0.97)" }}
+    >
+      <div className="flex items-center justify-between px-4 h-14 shrink-0" style={{ background: "#075E54" }}>
+        <button onClick={onClose} className="text-white"><X className="w-5 h-5" /></button>
+        <span className="text-white text-sm font-semibold">
+          {isSender ? "Photo you sent (view once)" : "Viewed — deleted from servers"}
+        </span>
+        <div className="w-5" />
+      </div>
+      <div className="flex-1 flex items-center justify-center p-4">
+        {src ? (
+          <img src={src} alt="View once" className="max-w-full max-h-full object-contain rounded-lg" />
+        ) : (
+          <div className="text-center">
+            <EyeOff className="w-14 h-14 mx-auto mb-3 text-white/20" />
+            <p className="text-white/50 text-base">Photo unavailable</p>
+            <p className="text-white/30 text-sm mt-1">Already viewed and permanently deleted</p>
+          </div>
+        )}
+      </div>
+      {!isSender && src && (
+        <div className="px-4 pb-6 text-center shrink-0">
+          <p className="text-white/40 text-xs">This photo has been permanently deleted from our servers.</p>
+        </div>
+      )}
+    </motion.div>
+  );
+}
+
 /* ── Main Chat component ───────────────────────────────────── */
 export default function Chat() {
   const { user } = useAuth();
@@ -102,6 +304,10 @@ export default function Chat() {
   const [swipeOffset, setSwipeOffset]   = useState<{ id: string; x: number } | null>(null);
   const swipeMeta = useRef<{ id: string; startX: number } | null>(null);
   const [optimisticMsgs, setOptimisticMsgs] = useState<any[]>([]);
+  const [cropModal, setCropModal] = useState<{ objectUrl: string } | null>(null);
+  const [viewOnceFs, setViewOnceFs] = useState<{ imageData: string | null; mimeType: string; isSender: boolean } | null>(null);
+  const [sendingViewOnce, setSendingViewOnce] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: messages, isLoading: messagesLoading, refetch: refetchMessages } =
     useGetChatMessages(activeChatId || "", undefined, {
@@ -144,6 +350,13 @@ export default function Chat() {
     socket.on("new_message", handler);
     return () => { socket.off("new_message", handler); };
   }, [socket, activeChatId, refetchMessages, refetchChats]);
+
+  useEffect(() => {
+    if (!socket) return;
+    const handler = () => { refetchMessages(); };
+    socket.on("view_once_viewed", handler);
+    return () => { socket.off("view_once_viewed", handler); };
+  }, [socket, refetchMessages]);
 
   const openChat = (chatId: string) => {
     setOptimisticMsgs([]);
@@ -194,6 +407,55 @@ export default function Chat() {
     } catch {
       setMessage(content);
       setOptimisticMsgs(prev => prev.filter(m => m._id !== tempId));
+    }
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const objectUrl = URL.createObjectURL(file);
+    setCropModal({ objectUrl });
+    e.target.value = "";
+  };
+
+  const handleCropSend = async (base64: string, mimeType: string) => {
+    if (!activeChatId) return;
+    const objectUrl = cropModal?.objectUrl;
+    setCropModal(null);
+    if (objectUrl) URL.revokeObjectURL(objectUrl);
+    setSendingViewOnce(true);
+    try {
+      const token = localStorage.getItem("nutterx_token");
+      const res = await fetch("/api/view-once", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ chatId: activeChatId, imageData: base64, mimeType }),
+      });
+      if (!res.ok) throw new Error("Failed to send");
+      refetchMessages();
+    } catch {
+      alert("Failed to send the photo. Please try again.");
+    } finally {
+      setSendingViewOnce(false);
+    }
+  };
+
+  const handleViewOnce = async (imageId: string, isSenderCheck: boolean) => {
+    try {
+      const token = localStorage.getItem("nutterx_token");
+      const res = await fetch(`/api/view-once/${imageId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.status === 410 || res.status === 404) {
+        setViewOnceFs({ imageData: null, mimeType: "image/jpeg", isSender: isSenderCheck });
+        return;
+      }
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      setViewOnceFs({ imageData: data.imageData, mimeType: data.mimeType || "image/jpeg", isSender: data.isSender });
+      if (!data.isSender) refetchMessages();
+    } catch {
+      alert("Could not load photo.");
     }
   };
 
@@ -313,6 +575,29 @@ export default function Chat() {
     <div className="fixed inset-0 flex flex-col overflow-hidden" style={{ paddingTop: 64 }}>
       {/* Link preview modal */}
       {previewUrl && <LinkModal url={previewUrl} onClose={() => setPreviewUrl(null)} />}
+
+      {/* Crop modal */}
+      <AnimatePresence>
+        {cropModal && (
+          <CropModal
+            objectUrl={cropModal.objectUrl}
+            onSend={handleCropSend}
+            onCancel={() => { URL.revokeObjectURL(cropModal.objectUrl); setCropModal(null); }}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* View-once fullscreen */}
+      <AnimatePresence>
+        {viewOnceFs && (
+          <ViewOnceFullscreen
+            imageData={viewOnceFs.imageData}
+            mimeType={viewOnceFs.mimeType}
+            isSender={viewOnceFs.isSender}
+            onClose={() => setViewOnceFs(null)}
+          />
+        )}
+      </AnimatePresence>
 
       <div className="flex-1 relative overflow-hidden min-h-0">
 
@@ -633,7 +918,27 @@ export default function Chat() {
                                   <div className="opacity-70 truncate">{msg.replyTo.content}</div>
                                 </div>
                               )}
-                              {renderContent(msg.content, setPreviewUrl)}
+                              {msg.type === "view_once_image" ? (
+                                <button
+                                  onClick={() => handleViewOnce(msg.content, isOwn)}
+                                  className="flex items-center gap-2.5 py-0.5 select-none"
+                                >
+                                  <div
+                                    className="w-9 h-9 rounded-full flex items-center justify-center shrink-0"
+                                    style={{ background: isOwn ? "rgba(0,0,0,0.12)" : "rgba(7,94,84,0.12)" }}
+                                  >
+                                    <Eye className="w-4 h-4" style={{ color: isOwn ? "#075E54" : "#075E54" }} />
+                                  </div>
+                                  <div className="text-left">
+                                    <div className="text-xs font-semibold" style={{ color: "#075E54" }}>
+                                      {isOwn ? "Photo · View once" : "Photo · Tap to view"}
+                                    </div>
+                                    <div className="text-[10px]" style={{ color: "#667781" }}>
+                                      {isOwn ? "Sent" : "Once viewed, it's gone"}
+                                    </div>
+                                  </div>
+                                </button>
+                              ) : renderContent(msg.content, setPreviewUrl)}
                             </div>
                             <div className="flex items-center gap-2 mt-0.5 px-1">
                               <span className="text-[10px]" style={{ color: "#667781" }}>
@@ -725,6 +1030,29 @@ export default function Chat() {
                 className="px-3 py-2.5 shrink-0 flex items-center gap-2"
                 style={{ background: "#F0F2F5" }}
               >
+                {/* Hidden file input */}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleFileSelect}
+                />
+                {/* Camera button */}
+                <motion.button
+                  type="button"
+                  whileTap={{ scale: 0.88 }}
+                  disabled={sendingViewOnce}
+                  onClick={() => fileInputRef.current?.click()}
+                  className="w-11 h-11 rounded-full flex items-center justify-center shrink-0 transition-all"
+                  style={{ background: sendingViewOnce ? "#B0BEC5" : "#128C7E" }}
+                  title="Send a view-once photo"
+                >
+                  {sendingViewOnce
+                    ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    : <Camera className="w-5 h-5 text-white" />
+                  }
+                </motion.button>
                 <form onSubmit={handleSend} className="flex-1 flex items-center gap-2">
                   <input
                     value={message}

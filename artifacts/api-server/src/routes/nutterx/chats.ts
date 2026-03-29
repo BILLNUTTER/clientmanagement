@@ -136,6 +136,7 @@ router.get("/:chatId/messages", authenticate, async (req: AuthRequest, res: Resp
     const msgs = await db.select({
       id: messages.id, content: messages.content, read: messages.read,
       createdAt: messages.createdAt, chatId: messages.chatId, replyToId: messages.replyToId,
+      type: messages.type,
       sender: { id: users.id, name: users.name, email: users.email, avatar: users.avatar },
     }).from(messages)
       .innerJoin(users, eq(messages.senderId, users.id))

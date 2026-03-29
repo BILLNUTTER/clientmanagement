@@ -124,6 +124,21 @@ export async function runMigrations(): Promise<void> {
     ALTER TABLE messages ADD COLUMN IF NOT EXISTS reply_to_id UUID REFERENCES messages(id) ON DELETE SET NULL;
     ALTER TABLE service_requests ADD COLUMN IF NOT EXISTS mpesa_message TEXT;
     ALTER TABLE deadline_payments ADD COLUMN IF NOT EXISTS mpesa_message TEXT;
+    ALTER TABLE messages ADD COLUMN IF NOT EXISTS type TEXT NOT NULL DEFAULT 'text';
+  `);
+
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS view_once_images (
+      id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      message_id  UUID REFERENCES messages(id) ON DELETE CASCADE,
+      sender_id   UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      chat_id     UUID NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
+      image_data  TEXT,
+      mime_type   TEXT NOT NULL DEFAULT 'image/jpeg',
+      viewed      BOOLEAN NOT NULL DEFAULT false,
+      viewed_at   TIMESTAMPTZ,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
   `);
 
   logger.info("Database migrations completed");
