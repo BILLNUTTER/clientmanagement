@@ -878,8 +878,8 @@ export default function Chat() {
                   <AnimatePresence initial={false}>
                     {allMessages.map((msg: any) => {
                       const isOwn = msg.sender?._id === user?._id;
-                      const msgSwipe = swipeOffset?.id === msg._id ? swipeOffset.x : 0;
-                      const isSwiping = swipeOffset?.id === msg._id;
+                      const msgSwipe = swipeOffset !== null && swipeOffset.id === msg._id ? swipeOffset.x : 0;
+                      const isSwiping = swipeOffset !== null && swipeOffset.id === msg._id;
                       return (
                         <motion.div
                           key={msg._id}
